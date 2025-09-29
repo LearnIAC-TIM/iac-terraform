@@ -162,6 +162,7 @@ jobs:
   # ==============================
   cleanup:
     runs-on: ubuntu-latest
+    environment: dev
     needs: destroy  # 🔥 Venter på destroy-job
     if: always()    # Kjører selv om destroy feiler
     timeout-minutes: 10  # Kort timeout for cleanup
