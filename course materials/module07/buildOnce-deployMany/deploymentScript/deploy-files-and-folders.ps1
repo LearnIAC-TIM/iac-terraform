@@ -25,7 +25,6 @@ $folders = @(
     "terraform",
     "environments",
     "backend-configs",
-    ".github/workflows",
     "scripts"
 )
 
@@ -65,7 +64,7 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
-  skip_provider_registration = false
+  resource_provider_registrations = "none"
 }
 '@ | Out-File -FilePath "terraform/versions.tf" -Encoding UTF8
 
@@ -149,7 +148,7 @@ resource "azurerm_storage_account" "main" {
 # Storage Container
 resource "azurerm_storage_container" "demo" {
   name                  = "demo-data"
-  storage_account_id    = azurerm_storage_account.main.id
+  storage_account_id   = azurerm_storage_account.main.id
   container_access_type = "private"
 }
 '@ | Out-File -FilePath "terraform/main.tf" -Encoding UTF8
@@ -484,7 +483,6 @@ simple-terraform/
 ├── terraform/          # Terraform kode (felles)
 ├── environments/       # Miljø-spesifikk config
 ├── backend-configs/    # Backend config per miljø
-├── .github/workflows/  # GitHub Actions pipeline
 └── scripts/           # Build og deploy scripts
 ```
 
@@ -568,28 +566,6 @@ diff workspace-dev/terraform/.terraform.lock.hcl \
 Del 2: Artifact Storage i Azure og eksisterende infrastruktur
 '@ | Out-File -FilePath "README.md" -Encoding UTF8
 
-# .gitignore
-Write-Host "  ✓ .gitignore" -ForegroundColor Gray
-@'
-# Terraform
-**/.terraform/*
-*.tfstate
-*.tfstate.*
-.terraform.lock.hcl
-
-# Artifacts
-*.tar.gz
-workspace-*/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-
-# OS
-.DS_Store
-Thumbs.db
-'@ | Out-File -FilePath ".gitignore" -Encoding UTF8
 
 # ============================================
 # FINISH
@@ -645,13 +621,11 @@ echo "📁 Oppretter mappestruktur..."
 mkdir -p terraform
 mkdir -p environments
 mkdir -p backend-configs
-mkdir -p .github/workflows
 mkdir -p scripts
 
 echo "  ✓ terraform"
 echo "  ✓ environments"
 echo "  ✓ backend-configs"
-echo "  ✓ .github/workflows"
 echo "  ✓ scripts"
 echo ""
 
@@ -769,7 +743,7 @@ resource "azurerm_storage_account" "main" {
 # Storage Container
 resource "azurerm_storage_container" "demo" {
   name                  = "demo-data"
-  storage_account_name  = azurerm_storage_account.main.name
+  storage_account_id   = azurerm_storage_account.main.id
   container_access_type = "private"
 }
 EOF
@@ -861,7 +835,7 @@ echo ""
 # Validate Terraform
 echo "1️⃣ Validating Terraform..."
 cd terraform
-terraform fmt -check -recursive || (echo "⚠️  Run 'terraform fmt -recursive' to fix formatting" && exit 1)
+terraform fmt -recursive || (echo "⚠️  Run 'terraform fmt -recursive' to fix formatting" && exit 1)
 terraform init -backend=false
 terraform validate
 cd ..
@@ -962,13 +936,6 @@ chmod +x scripts/deploy.sh
 
 # Same PowerShell scripts from above would go here...
 # (Omitted for brevity as they're identical to PowerShell version)
-
-# ============================================
-# GITHUB ACTIONS (identical to PowerShell version)
-# ============================================
-
-echo "  ✓ .github/workflows/pipeline.yml"
-# (Same content as PowerShell version)
 
 # ============================================
 # DOCUMENTATION

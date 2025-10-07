@@ -25,13 +25,11 @@ echo "📁 Oppretter mappestruktur..."
 mkdir -p terraform
 mkdir -p environments
 mkdir -p backend-configs
-mkdir -p .github/workflows
 mkdir -p scripts
 
 echo "  ✓ terraform"
 echo "  ✓ environments"
 echo "  ✓ backend-configs"
-echo "  ✓ .github/workflows"
 echo "  ✓ scripts"
 echo ""
 
@@ -65,7 +63,7 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
-  skip_provider_registration = false
+  resource_provider_registrations = "none"
 }
 EOF
 
@@ -149,7 +147,7 @@ resource "azurerm_storage_account" "main" {
 # Storage Container
 resource "azurerm_storage_container" "demo" {
   name                  = "demo-data"
-  storage_account_name  = azurerm_storage_account.main.name
+  storage_account_id   = azurerm_storage_account.main.id
   container_access_type = "private"
 }
 EOF
@@ -435,7 +433,7 @@ echo ""
 # Validate Terraform
 echo "1️⃣ Validating Terraform..."
 cd terraform
-terraform fmt -check -recursive || (echo "⚠️  Run 'terraform fmt -recursive' to fix formatting" && exit 1)
+terraform fmt -recursive || (echo "⚠️  Run 'terraform fmt -recursive' to fix formatting" && exit 1)
 terraform init -backend=false
 terraform validate
 cd ..
@@ -548,201 +546,6 @@ EOFSCRIPT
 chmod +x scripts/deploy.sh
 
 # ============================================
-# GITHUB ACTIONS
-# ============================================
-
-echo "  ✓ .github/workflows/pipeline.yml"
-cat > .github/workflows/pipeline.yml << 'EOF'
-name: Build Once Deploy Many - Demo
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
-
-env:
-  TF_VERSION: '1.5.7'
-
-jobs:
-  # ==========================================
-  # BUILD STAGE - Kjører ÉN gang
-  # ==========================================
-  build:
-    name: 'Build Artifact'
-    runs-on: ubuntu-latest
-    
-    outputs:
-      artifact_version: ${{ steps.version.outputs.version }}
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Generate version
-        id: version
-        run: |
-          VERSION=$(git rev-parse --short HEAD)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "📌 Building version: $VERSION"
-      
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-      
-      - name: Terraform Format Check
-        run: |
-          cd terraform
-          terraform fmt -check -recursive
-      
-      - name: Terraform Init (no backend)
-        run: |
-          cd terraform
-          terraform init -backend=false
-      
-      - name: Terraform Validate
-        run: |
-          cd terraform
-          terraform validate
-      
-      - name: Create Artifact
-        run: |
-          VERSION=${{ steps.version.outputs.version }}
-          
-          tar -czf terraform-${VERSION}.tar.gz \
-            terraform/ \
-            environments/ \
-            backend-configs/
-          
-          echo "✅ Created artifact: terraform-${VERSION}.tar.gz"
-          ls -lh terraform-${VERSION}.tar.gz
-      
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-artifact
-          path: terraform-*.tar.gz
-          retention-days: 30
-      
-      - name: Build Summary
-        run: |
-          echo "### Build Complete 📦" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Terraform**: ${{ env.TF_VERSION }}" >> $GITHUB_STEP_SUMMARY
-
-  # ==========================================
-  # DEPLOY TO DEV - Bruker samme artifact
-  # ==========================================
-  deploy-dev:
-    name: 'Deploy to Dev'
-    needs: build
-    runs-on: ubuntu-latest
-    environment: dev
-    
-    steps:
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: terraform-artifact
-      
-      - name: Extract Artifact
-        run: |
-          mkdir -p workspace
-          tar -xzf terraform-*.tar.gz -C workspace
-          echo "📂 Artifact contents:"
-          ls -la workspace
-      
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-      
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
-      - name: Terraform Init
-        run: |
-          cd workspace/terraform
-          terraform init -backend-config=../backend-configs/backend-dev.tfvars
-      
-      - name: Terraform Plan
-        run: |
-          cd workspace/terraform
-          terraform plan -var-file=../environments/dev.tfvars -out=tfplan
-      
-      - name: Terraform Apply
-        run: |
-          cd workspace/terraform
-          terraform apply -auto-approve tfplan
-      
-      - name: Deployment Summary
-        run: |
-          echo "### Dev Deployment ✅" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Artifact**: ${{ needs.build.outputs.artifact_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: Development" >> $GITHUB_STEP_SUMMARY
-
-  # ==========================================
-  # DEPLOY TO TEST - Bruker samme artifact!
-  # ==========================================
-  deploy-test:
-    name: 'Deploy to Test'
-    needs: [build, deploy-dev]
-    runs-on: ubuntu-latest
-    environment: test
-    
-    steps:
-      - name: Download SAME Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: terraform-artifact
-      
-      - name: Extract Artifact
-        run: |
-          mkdir -p workspace
-          tar -xzf terraform-*.tar.gz -C workspace
-      
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-      
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
-      - name: Terraform Init (TEST Backend)
-        run: |
-          cd workspace/terraform
-          terraform init -backend-config=../backend-configs/backend-test.tfvars
-      
-      - name: Terraform Plan
-        run: |
-          cd workspace/terraform
-          terraform plan -var-file=../environments/test.tfvars -out=tfplan
-      
-      - name: Terraform Apply
-        run: |
-          cd workspace/terraform
-          terraform apply -auto-approve tfplan
-      
-      - name: Deployment Summary
-        run: |
-          echo "### Test Deployment ✅" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Artifact**: ${{ needs.build.outputs.artifact_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: Test" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Note**: Same artifact as Dev! ✨" >> $GITHUB_STEP_SUMMARY
-EOF
-
-# ============================================
 # DOCUMENTATION
 # ============================================
 
@@ -766,7 +569,6 @@ simple-terraform/
 ├── terraform/          # Terraform kode (felles)
 ├── environments/       # Miljø-spesifikk config
 ├── backend-configs/    # Backend config per miljø
-├── .github/workflows/  # GitHub Actions pipeline
 └── scripts/           # Build og deploy scripts
 ```
 
@@ -836,28 +638,6 @@ Pipeline kjører automatisk ved push til main:
 ## 🎓 Neste Steg
 
 Del 2: Artifact Storage i Azure og eksisterende infrastruktur
-EOF
-
-echo "  ✓ .gitignore"
-cat > .gitignore << 'EOF'
-# Terraform
-**/.terraform/*
-*.tfstate
-*.tfstate.*
-.terraform.lock.hcl
-
-# Artifacts
-*.tar.gz
-workspace-*/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-
-# OS
-.DS_Store
-Thumbs.db
 EOF
 
 # ============================================
