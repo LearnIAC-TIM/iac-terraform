@@ -50,11 +50,11 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.80.0"
+      version = "~> 4.40"
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.5.0"
+      version = "~> 3.7.0"
     }
   }
 }
@@ -65,6 +65,7 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
+  skip_provider_registration = false
 }
 '@ | Out-File -FilePath "terraform/versions.tf" -Encoding UTF8
 
@@ -138,7 +139,6 @@ resource "azurerm_storage_account" "main" {
   account_replication_type = "LRS"
   
   min_tls_version           = "TLS1_2"
-  enable_https_traffic_only = true
 
   tags = {
     Environment = var.environment
@@ -149,7 +149,7 @@ resource "azurerm_storage_account" "main" {
 # Storage Container
 resource "azurerm_storage_container" "demo" {
   name                  = "demo-data"
-  storage_account_name  = azurerm_storage_account.main.name
+  storage_account_id    = azurerm_storage_account.main.id
   container_access_type = "private"
 }
 '@ | Out-File -FilePath "terraform/main.tf" -Encoding UTF8
