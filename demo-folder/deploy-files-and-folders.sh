@@ -816,14 +816,14 @@ Pipeline kjører automatisk ved push til main:
 
 ## 🧹 Cleanup
 
-**Linux/Mac:**
 ```bash
-./scripts/cleanup.sh dev terraform-<version>.tar.gz
-```
+# Destroy dev
+cd workspace-dev/terraform
+terraform destroy -var-file=../environments/dev.tfvars -auto-approve
 
-**Windows:**
-```powershell
-.\scripts\cleanup.ps1 -Environment dev -Artifact terraform-<version>.tar.gz
+# Destroy test
+cd ../../workspace-test/terraform
+terraform destroy -var-file=../environments/test.tfvars -auto-approve
 ```
 
 ## 📚 Læringsmål
