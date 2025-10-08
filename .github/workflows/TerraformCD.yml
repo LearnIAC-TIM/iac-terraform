@@ -24,7 +24,6 @@ jobs:
       ENVIRONMENT: "dev"
       LOCATION: "norwayeast"
       PROJECT_NAME: "demo"
-      REPLICATION_TYPE: "LRS"
     
     steps:
       - name: Checkout code
@@ -90,7 +89,6 @@ jobs:
       ENVIRONMENT: "test"
       LOCATION: "norwayeast"
       PROJECT_NAME: "demo"
-      REPLICATION_TYPE: "GRS"
     
     steps:
       - name: Checkout code
@@ -147,7 +145,7 @@ jobs:
     name: Deploy to PROD
     runs-on: ubuntu-latest
     needs: deploy-test
-    environment: production
+    environment: prod
     env:
       WORKDIR: "course materials/module07/buildOnce-deployMany/simple-terraform"
       BACKEND_HCL: "course materials/module07/buildOnce-deployMany/simple-terraform/shared/backend.hcl"
@@ -156,7 +154,6 @@ jobs:
       ENVIRONMENT: "prod"
       LOCATION: "norwayeast"
       PROJECT_NAME: "demo"
-      REPLICATION_TYPE: "GRS"
     
     steps:
       - name: Checkout code
