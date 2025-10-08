@@ -4,20 +4,6 @@ Dette prosjektet demonstrerer moderne Infrastructure as Code (IaC) praksis ved b
 
 ---
 
-## 📚 Innholdsfortegnelse
-
-1. [Konsepter og Prinsipper](#konsepter-og-prinsipper)
-2. [Prosjektstruktur](#prosjektstruktur)
-3. [Forutsetninger](#forutsetninger)
-4. [Første gangs oppsett](#første-gangs-oppsett)
-5. [Lokal utvikling](#lokal-utvikling)
-6. [CI/CD Workflow](#cicd-workflow)
-7. [Praktiske eksempler](#praktiske-eksempler)
-8. [Feilsøking](#feilsøking)
-9. [Best Practices](#best-practices)
-
----
-
 ## 🎯 Konsepter og Prinsipper
 
 ### Infrastructure as Code (IaC)
