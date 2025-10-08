@@ -143,30 +143,49 @@ jobs:
         working-directory: ${{ env.WORKDIR }}/terraform
         id: plan
         run: |
+          # Kjør plan og fang både stdout og stderr
+          set +e  # Ikke stopp ved feil
           terraform plan -no-color \
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="location=${{ env.LOCATION }}" \
             -var="project_name=${{ env.PROJECT_NAME }}" \
-            -out=${{ matrix.environment }}.tfplan
+            -out=${{ matrix.environment }}.tfplan 2>&1 | tee plan-output.txt
+          
+          PLAN_EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+          
+          # Lagre output og exit code
+          {
+            echo "PLAN_EXIT_CODE=${PLAN_EXIT_CODE}"
+            echo 'PLAN_OUTPUT<<EOF'
+            cat plan-output.txt
+            echo 'EOF'
+          } >> "$GITHUB_ENV"
+          
+          exit ${PLAN_EXIT_CODE}
         continue-on-error: true
       
       - name: Comment PR with Plan
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
-        env:
-          PLAN: "${{ steps.plan.outputs.stdout }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const output = `#### Terraform Plan for \`${{ matrix.environment }}\` 📋
+            const planOutput = process.env.PLAN_OUTPUT || 'No plan output available';
+            const exitCode = process.env.PLAN_EXIT_CODE || 'unknown';
+            const status = exitCode === '0' ? '✅ Success' : '❌ Failed';
+            
+            const output = `#### Terraform Plan for \`${{ matrix.environment }}\` 📋 ${status}
             
             <details><summary>Show Plan</summary>
             
             \`\`\`terraform
-            ${process.env.PLAN}
+            ${planOutput}
             \`\`\`
             
             </details>
+            
+            **Exit Code:** ${exitCode}
             
             *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Workflow: \`${{ github.workflow }}\`*`;
             
