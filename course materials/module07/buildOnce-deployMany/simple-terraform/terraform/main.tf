@@ -33,9 +33,6 @@ resource "azurerm_storage_account" "main" {
     ManagedBy   = "Terraform"
     Owner       = "Tor Ivar Melling"
     Dato        = "2025-10-08"
-    Demo        = "StorageAccount"
-    Project     = "jajajaja"
-    EndaENdre   = "test"
   }
 }
 
