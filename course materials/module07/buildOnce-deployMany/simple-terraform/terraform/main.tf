@@ -43,3 +43,9 @@ resource "azurerm_storage_container" "demo" {
   storage_account_id    = azurerm_storage_account.main.id
   container_access_type = "private"
 }
+
+resource "azurerm_storage_container" "demo2" {
+  name                  = "demo-data2"
+  storage_account_id    = azurerm_storage_account.main.id
+  container_access_type = "private"
+}
