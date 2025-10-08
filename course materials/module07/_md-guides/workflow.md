@@ -22,25 +22,6 @@ Dette prosjektet demonstrerer moderne Infrastructure as Code (IaC) praksis ved b
 
 ### Infrastructure as Code (IaC)
 
-**Hva er det?**
-Infrastructure as Code er praksisen med å behandle infrastruktur (servere, nettverk, databaser) som kode. I stedet for å klikke i Azure Portal for å opprette ressurser, skriver vi kode som beskriver hva vi vil ha.
-
-**Fordeler:**
-- ✅ **Versjonskontroll** - All infrastruktur er i Git
-- ✅ **Reproduserbarhet** - Samme kode gir samme resultat
-- ✅ **Dokumentasjon** - Koden ER dokumentasjonen
-- ✅ **Testing** - Kan valideres før deploy
-- ✅ **Samarbeid** - Code review på infrastruktur
-
-**Eksempel:**
-```hcl
-# I stedet for å klikke i Azure Portal:
-resource "azurerm_resource_group" "main" {
-  name     = "rg-demo-dev"
-  location = "norwayeast"
-}
-```
-
 ### Build Once, Deploy Many
 
 **Tradisjonell applikasjonsutvikling:**
@@ -61,7 +42,6 @@ Terraform-kode → Valider → Samme .tf filer → Deploy til dev, test, prod
 **Hva varierer mellom miljøer?**
 - Miljønavn (dev, test, prod)
 - Størrelse/tier (Standard vs Premium)
-- Replikering (LRS vs GRS)
 - Tags og metadata
 
 **Hva er likt?**
