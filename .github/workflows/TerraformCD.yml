@@ -1,0 +1,221 @@
+name: Terraform CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "course materials/module07/buildOnce-deployMany/simple-terraform/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-dev:
+    name: Deploy to DEV
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      WORKDIR: "course materials/module07/buildOnce-deployMany/simple-terraform"
+      BACKEND_HCL: "course materials/module07/buildOnce-deployMany/simple-terraform/shared/backend.hcl"
+      TF_INPUT: "false"
+      TF_IN_AUTOMATION: "true"
+      ENVIRONMENT: "dev"
+      LOCATION: "norwayeast"
+      PROJECT_NAME: "demo"
+      REPLICATION_TYPE: "LRS"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.3
+          terraform_wrapper: false
+      
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Export ARM_* for Terraform (OIDC)
+        run: |
+          {
+            echo "ARM_USE_OIDC=true"
+            echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}"
+            echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}"
+            echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          } >> "$GITHUB_ENV"
+      
+      - name: Terraform Init
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/${{ env.BACKEND_HCL }}" \
+            -backend-config="key=projects/storageaccount/${{ env.ENVIRONMENT }}/${{ env.ENVIRONMENT }}.tfstate" \
+            -input=false \
+            -no-color
+      
+      - name: Terraform Apply
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform apply -auto-approve \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="location=${{ env.LOCATION }}" \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
+            -no-color
+      
+      - name: Terraform Output
+        working-directory: ${{ env.WORKDIR }}/terraform
+        id: output
+        run: |
+          echo "### Terraform Outputs for DEV" >> $GITHUB_STEP_SUMMARY
+          terraform output -no-color | tee -a $GITHUB_STEP_SUMMARY
+
+  deploy-test:
+    name: Deploy to TEST
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: test
+    env:
+      WORKDIR: "course materials/module07/buildOnce-deployMany/simple-terraform"
+      BACKEND_HCL: "course materials/module07/buildOnce-deployMany/simple-terraform/shared/backend.hcl"
+      TF_INPUT: "false"
+      TF_IN_AUTOMATION: "true"
+      ENVIRONMENT: "test"
+      LOCATION: "norwayeast"
+      PROJECT_NAME: "demo"
+      REPLICATION_TYPE: "GRS"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.3
+          terraform_wrapper: false
+      
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Export ARM_* for Terraform (OIDC)
+        run: |
+          {
+            echo "ARM_USE_OIDC=true"
+            echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}"
+            echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}"
+            echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          } >> "$GITHUB_ENV"
+      
+      - name: Terraform Init
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/${{ env.BACKEND_HCL }}" \
+            -backend-config="key=projects/storageaccount/${{ env.ENVIRONMENT }}/${{ env.ENVIRONMENT }}.tfstate" \
+            -input=false \
+            -no-color
+      
+      - name: Terraform Apply
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform apply -auto-approve \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="location=${{ env.LOCATION }}" \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
+            -no-color
+      
+      - name: Terraform Output
+        working-directory: ${{ env.WORKDIR }}/terraform
+        id: output
+        run: |
+          echo "### Terraform Outputs for TEST" >> $GITHUB_STEP_SUMMARY
+          terraform output -no-color | tee -a $GITHUB_STEP_SUMMARY
+
+  deploy-prod:
+    name: Deploy to PROD
+    runs-on: ubuntu-latest
+    needs: deploy-test
+    environment: production
+    env:
+      WORKDIR: "course materials/module07/buildOnce-deployMany/simple-terraform"
+      BACKEND_HCL: "course materials/module07/buildOnce-deployMany/simple-terraform/shared/backend.hcl"
+      TF_INPUT: "false"
+      TF_IN_AUTOMATION: "true"
+      ENVIRONMENT: "prod"
+      LOCATION: "norwayeast"
+      PROJECT_NAME: "demo"
+      REPLICATION_TYPE: "GRS"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.3
+          terraform_wrapper: false
+      
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Export ARM_* for Terraform (OIDC)
+        run: |
+          {
+            echo "ARM_USE_OIDC=true"
+            echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}"
+            echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}"
+            echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          } >> "$GITHUB_ENV"
+      
+      - name: Terraform Init
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/${{ env.BACKEND_HCL }}" \
+            -backend-config="key=projects/storageaccount/${{ env.ENVIRONMENT }}/${{ env.ENVIRONMENT }}.tfstate" \
+            -input=false \
+            -no-color
+      
+      - name: Terraform Apply
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform apply -auto-approve \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="location=${{ env.LOCATION }}" \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
+            -no-color
+      
+      - name: Terraform Output
+        working-directory: ${{ env.WORKDIR }}/terraform
+        id: output
+        run: |
+          echo "### Terraform Outputs for PROD" >> $GITHUB_STEP_SUMMARY
+          terraform output -no-color | tee -a $GITHUB_STEP_SUMMARY
+      
+      - name: Deployment Summary
+        run: |
+          echo "## 🎉 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All environments have been successfully deployed:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ DEV" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ TEST" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ PROD" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Same Terraform code deployed to all environments!**" >> $GITHUB_STEP_SUMMARY
