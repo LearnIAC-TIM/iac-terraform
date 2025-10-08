@@ -5,7 +5,7 @@ on:
     branches: 
       - main
     paths:
-      - "course materials/module07/buildOnce-deployMany/simple-terraform"
+      - "course materials/module07/buildOnce-deployMany/simple-terraform/**"
 
 permissions:
   id-token: write
