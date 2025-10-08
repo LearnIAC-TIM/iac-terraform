@@ -623,10 +623,6 @@ Pipeline kjører automatisk ved push til main:
 ./scripts/cleanup.sh dev terraform-<version>.tar.gz
 ```
 
-**Windows:**
-```powershell
-.\scripts\cleanup.ps1 -Environment dev -Artifact terraform-<version>.tar.gz
-```
 
 ## 📚 Læringsmål
 
