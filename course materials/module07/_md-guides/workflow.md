@@ -117,73 +117,22 @@ Du har allerede følgende fra tidligere øvinger:
 - ✅ **Container** i Storage Account (typisk "tfstate")
 - ✅ **Key Vault** (hvis du bruker secrets)
 
-### 2. Lokale verktøy
 
-Installer følgende på din maskin:
-
-```bash
-# Terraform
-brew install terraform
-
-# Azure CLI
-brew install azure-cli
-
-# Git (sannsynligvis allerede installert)
-git --version
-```
-
-### 3. GitHub Account
-
-- GitHub konto
-- Tilgang til å opprette repositories
-- Forståelse av Git basics (commit, push, pull, branch)
-
----
-
-## 🚀 Første gangs oppsett
-
-### Steg 1: Opprett GitHub Repository
-
-```bash
-# Opprett nytt repository på GitHub.com
-# Navn: iac-terraform-demo
-# Visibility: Private
-# Ikke initialiser med README (vi lager det selv)
-```
-
-### Steg 2: Clone og sett opp lokalt
-
-```bash
-# Clone repository
-git clone https://github.com/<ditt-brukernavn>/iac-terraform-demo.git
-cd iac-terraform-demo
-
-# Opprett mappestruktur
-mkdir -p terraform
-mkdir -p shared
-mkdir -p .github/workflows
-
-# Kopier Terraform-filer til terraform/
-# Kopier workflows til .github/workflows/
-```
-
-### Steg 3: Konfigurer backend
+### Steg 2: Konfigurer backend
 
 Opprett `shared/backend.hcl` med dine verdier:
 
 ```hcl
 # shared/backend.hcl
-resource_group_name  = "rg-<dinbruker>-tfstate"
-storage_account_name = "st<dinbruker>tfstate"
-container_name       = "tfstate"
+resource_group_name  = "<DIN RESOURCE GROUP>"
+storage_account_name = "<DIN STORAGE ACCOUNT"
+container_name       = "<DIN CONTAINER NAME>"
 ```
 
-**VIKTIG:** Denne filen skal IKKE committes til Git! Den er i `.gitignore`.
-
-### Steg 4: Test Terraform lokalt
+### Steg 3: Test Terraform lokalt
 
 ```bash
-# Logg inn til Azure
+# Logg inn til Azure i VS Code
 az login
 az account set --subscription "<DIN_SUBSCRIPTION_ID>"
 
@@ -204,86 +153,10 @@ terraform plan \
 
 Hvis alt fungerer, er du klar for å sette opp GitHub Actions!
 
-### Steg 5: Konfigurer GitHub Secrets
 
-Gå til **Repository → Settings → Secrets and variables → Actions**
+### Steg 4: Opprett workflows i Github.com
 
-Opprett følgende **Repository secrets:**
-
-```
-AZURE_CLIENT_ID          = <din-service-principal-client-id>
-AZURE_TENANT_ID          = <din-azure-tenant-id>
-AZURE_SUBSCRIPTION_ID    = <din-subscription-id>
-```
-
-### Steg 6: Konfigurer GitHub Environments
-
-Gå til **Repository → Settings → Environments**
-
-Opprett tre environments:
-
-#### Environment: `dev`
-- Protection rules: **None**
-- Environment secrets:
-  ```
-  BACKEND_RESOURCE_GROUP   = rg-<dinbruker>-tfstate
-  BACKEND_STORAGE_ACCOUNT  = st<dinbruker>tfstate
-  BACKEND_CONTAINER_NAME   = tfstate
-  ```
-
-#### Environment: `test`
-- Protection rules: **None**
-- Environment secrets: (samme som dev)
-
-#### Environment: `production`
-- Protection rules: 
-  - ✅ **Required reviewers:** 1 (velg deg selv)
-- Environment secrets: (samme som dev)
-
-### Steg 7: Konfigurer Azure Federated Credentials
-
-I Azure Portal → App Registrations → Din Service Principal:
-
-**Certificates & secrets → Federated credentials**
-
-Opprett **3 credentials:**
-
-#### Credential 1: Dev
-```
-Name: github-actions-dev
-Scenario: GitHub Actions deploying Azure resources
-Organization: <ditt-github-brukernavn>
-Repository: iac-terraform-demo
-Entity type: Environment
-Environment name: dev
-```
-
-#### Credential 2: Test
-```
-Name: github-actions-test
-Entity type: Environment
-Environment name: test
-```
-
-#### Credential 3: Prod
-```
-Name: github-actions-prod
-Entity type: Environment
-Environment name: production
-```
-
-### Steg 8: Commit og push workflows
-
-```bash
-# Commit workflows
-git add .github/workflows/
-git add .gitignore
-git add README.md
-git commit -m "Add CI/CD workflows and documentation"
-git push origin main
-```
-
-**Gratulerer! Oppsettet er ferdig!** 🎉
+Se video
 
 ---
 
@@ -310,7 +183,6 @@ terraform plan \
   -var="environment=dev" \
   -var="location=norwayeast" \
   -var="project_name=demo" \
-  -var="replication_type=LRS"
 
 # 5. Commit og push
 git add terraform/main.tf
