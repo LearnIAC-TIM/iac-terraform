@@ -31,6 +31,7 @@ resource "azurerm_storage_account" "main" {
   tags = {
     Environment = var.environment
     ManagedBy   = "Terraform"
+    Owner       = "Tor Ivar Melling"
   }
 }
 
