@@ -10,17 +10,17 @@ on:
 permissions:
   id-token: write
   contents: read
+  pull-requests: write  # ← Lagt til
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     environment: dev
     env:
-      # Oppdater disse to stiene til din repo-struktur
       WORKDIR: "course materials/module07/buildOnce-deployMany/simple-terraform"
       BACKEND_HCL: "course materials/module07/buildOnce-deployMany/simple-terraform/shared/backend.hcl"
-      TF_INPUT: "false"              # Forhindrer interactive input
-      TF_IN_AUTOMATION: "true"       # Terraform automation mode
+      TF_INPUT: "false"
+      TF_IN_AUTOMATION: "true"
       
     steps:
       - name: Checkout
@@ -30,16 +30,15 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.13.3
-          terraform_wrapper: false     # Bedre output
+          terraform_wrapper: false
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Gjør OIDC-kontekst tilgjengelig for Terraform (ARM_*)
       - name: Export ARM_* for Terraform (OIDC)
         run: |
           {
@@ -49,20 +48,16 @@ jobs:
             echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           } >> "$GITHUB_ENV"
 
-      # Kjører validering av koden
       - name: Terraform Format Check
-        working-directory: ${{ env.WORKDIR }}
+        working-directory: ${{ env.WORKDIR }}/terraform
         id: fmt
-        run: |
-          cd terraform
-          terraform fmt -recursive
+        run: terraform fmt -check -recursive  # ← Rettet
         continue-on-error: true
 
       - name: Terraform Init
-        working-directory: ${{ env.WORKDIR }}
+        working-directory: ${{ env.WORKDIR }}/terraform
         id: init
         run: |
-          cd terraform
           terraform init \
             -backend-config="${{ github.workspace }}/${{ env.BACKEND_HCL }}" \
             -backend-config="key=projects/storageaccount/dev/dev.tfstate" \
@@ -70,17 +65,20 @@ jobs:
             -no-color
       
       - name: Terraform Validate
-        working-directory: ${{ env.WORKDIR }}
+        working-directory: ${{ env.WORKDIR }}/terraform
         id: validate
-        run: |
-          cd terraform
-          terraform validate -no-color
+        run: terraform validate -no-color
 
   plan-all-environments:
     name: Plan - ${{ matrix.environment }}
     runs-on: ubuntu-latest
     needs: validate
-    environment: ${{ matrix.environment }}    # Bruker riktig environment per miljø
+    environment: ${{ matrix.environment }}
+    env:  # ← Lagt til
+      WORKDIR: "course materials/module07/buildOnce-deployMany/simple-terraform"
+      BACKEND_HCL: "course materials/module07/buildOnce-deployMany/simple-terraform/shared/backend.hcl"
+      TF_INPUT: "false"
+      TF_IN_AUTOMATION: "true"
     
     strategy:
       matrix:
@@ -94,15 +92,15 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.13.3
+          terraform_wrapper: false
       
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Gjør OIDC-kontekst tilgjengelig for Terraform (ARM_*)
       - name: Export ARM_* for Terraform (OIDC)
         run: |
           {
@@ -113,16 +111,13 @@ jobs:
           } >> "$GITHUB_ENV"
       
       - name: Terraform Init
-        working-directory: ${{ env.WORKDIR }}
+        working-directory: ${{ env.WORKDIR }}/terraform
         run: |
-          cd terraform
-          terraform init \
           terraform init \
             -backend-config="${{ github.workspace }}/${{ env.BACKEND_HCL }}" \
             -backend-config="key=projects/storageaccount/${{ matrix.environment }}/${{ matrix.environment }}.tfstate" \
             -input=false \
             -no-color
-            
       
       - name: Set Environment Variables
         run: |
@@ -131,27 +126,30 @@ jobs:
               echo "ENVIRONMENT=dev" >> $GITHUB_ENV
               echo "LOCATION=norwayeast" >> $GITHUB_ENV
               echo "PROJECT_NAME=demo" >> $GITHUB_ENV
+              echo "REPLICATION_TYPE=LRS" >> $GITHUB_ENV
               ;;
             test)
               echo "ENVIRONMENT=test" >> $GITHUB_ENV
               echo "LOCATION=norwayeast" >> $GITHUB_ENV
               echo "PROJECT_NAME=demo" >> $GITHUB_ENV
+              echo "REPLICATION_TYPE=GRS" >> $GITHUB_ENV
               ;;
             prod)
               echo "ENVIRONMENT=prod" >> $GITHUB_ENV
               echo "LOCATION=norwayeast" >> $GITHUB_ENV
               echo "PROJECT_NAME=demo" >> $GITHUB_ENV
+              echo "REPLICATION_TYPE=GRS" >> $GITHUB_ENV
               ;;
           esac
       
       - name: Terraform Plan
+        working-directory: ${{ env.WORKDIR }}/terraform
         id: plan
         run: |
-          cd terraform
           terraform plan -no-color \
-            -var="environment=${{ matrix.environment }}" \
-            -var="location=${{ env.location }}" \
-            -var="project_name=${{ env.project_name }}" \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="location=${{ env.LOCATION }}" \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
             -var="replication_type=${{ env.REPLICATION_TYPE }}" \
             -out=${{ matrix.environment }}.tfplan
         continue-on-error: true
