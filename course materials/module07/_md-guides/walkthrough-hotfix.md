@@ -101,12 +101,12 @@ resource "azurerm_storage_account" "main" {
 # Naviger til terraform-mappen
 cd terraform
 
-# Initialiser Terraform (hvis ikke gjort før)
-terraform init
+# Initialiser Terraform (Hvis ikke gjort før. OG - Hva er det som mangler i lokalt oppsett om en ikke får kjørt igjennom uten subscription? Tips: Environmental variables (søk opp environmental variables for terraform og bash / powershell i Terraform docks)
+terraform init # (MÅ VÆRE MED BACKEND CONFIG og key for state file, for at plan skal gi god info, hvis ikke vil alt alltid være en nyopprettelse)
 
 # Valider syntaks
 terraform fmt -check
-terraform validate
+terraform validate # Vil feile uten terraform init først.
 ```
 
 **Forventet output:**
