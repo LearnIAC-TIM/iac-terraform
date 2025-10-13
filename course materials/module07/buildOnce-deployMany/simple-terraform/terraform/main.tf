@@ -34,7 +34,6 @@ resource "azurerm_storage_account" "main" {
     Environment = var.environment
     ManagedBy   = "Terraform"
     Test        = "TestValue"
-    Test2       = "TestValue2"
   }
 }
 
