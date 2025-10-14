@@ -11,13 +11,13 @@ terraform {
 
 provider "azurerm" {
   features {
-    
+
     resource_group {
       prevent_deletion_if_contains_resources = false
     }
   }
-  subscription_id = "a3adf20e-4966-4afb-b717-4de1baae6db1"
-  use_cli         = true # Bruker pålogging via `az login`
+  subscription_id                 = "a3adf20e-4966-4afb-b717-4de1baae6db1"
+  use_cli                         = true # Bruker pålogging via `az login`
   resource_provider_registrations = "none"
 }
 
@@ -39,9 +39,9 @@ resource "azurerm_storage_account" "tfstate" {
   location                 = azurerm_resource_group.main.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
-  
+
   public_network_access_enabled = true
-  
+
   tags = var.tags
 }
 
@@ -61,9 +61,9 @@ resource "azurerm_key_vault" "main" {
   sku_name            = "standard"
 
   public_network_access_enabled = true
-  
+
   # RBAC authorization
-  enable_rbac_authorization = true
+  rbac_authorization_enabled = true
 
   tags = var.tags
 }

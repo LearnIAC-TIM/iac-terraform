@@ -31,7 +31,7 @@ output "key_vault_uri" {
 
 output "backend_config" {
   description = "Backend konfigurasjon for studenter å bruke i sine Terraform prosjekter"
-  value = <<-EOT
+  value       = <<-EOT
   
   # Legg denne backend konfigurasjonen i dine Terraform prosjekter:
   terraform {

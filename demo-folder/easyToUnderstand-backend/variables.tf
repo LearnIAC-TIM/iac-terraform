@@ -25,11 +25,6 @@ variable "key_vault_name" {
   type        = string
 }
 
-variable "tenant_id" {
-  description = "Azure AD Tenant ID"
-  type        = string
-}
-
 variable "service_principal_object_id" {
   description = "Object ID for Service Principal i EntraID"
   type        = string
