@@ -1,0 +1,16 @@
+# Resource Group
+resource_group_name = "rg-terraform-backend"
+location            = "norwayeast"
+
+# Storage Account (må være globalt unikt - bruk ditt eget navn)
+storage_account_name = "sttfbackend12345"
+
+# Container for Terraform state
+container_name = "tfstate"
+
+# Key Vault (må være globalt unikt - bruk ditt eget navn)
+key_vault_name = "kv-tfbackend-12345"
+
+# Azure AD / EntraID informasjon
+service_principal_object_id  = ""
+user_object_id              = ""
