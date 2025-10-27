@@ -33,20 +33,12 @@ resource "azurerm_storage_account" "main" {
   tags = {
     Environment = var.environment
     ManagedBy   = "Terraform"
-    Test        = "TestValue"
   }
 }
 
 # Storage Container
 resource "azurerm_storage_container" "demo" {
   name                  = "demo-data"
-  storage_account_id    = azurerm_storage_account.main.id
-  container_access_type = "private"
-}
-
-# Storage Container
-resource "azurerm_storage_container" "demo2" {
-  name                  = "demo-data3"
   storage_account_id    = azurerm_storage_account.main.id
   container_access_type = "private"
 }
