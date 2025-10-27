@@ -1,0 +1,38 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - uses: hashicorp/setup-terraform@v2
+      - name: Run offline tests
+        run: |
+          chmod +x tests/offline-tests.sh
+          ./tests/offline-tests.sh
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    needs: offline-tests
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hashicorp/setup-terraform@v2
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Terraform Plan
+        run: |
+          cd terraform
+          terraform init
+          terraform plan
+      - name: Static analysis
+        run: |
+          chmod +x tests/static-analysis-tests.sh
+          ./tests/static-analysis-tests.sh

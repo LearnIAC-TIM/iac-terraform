@@ -1,0 +1,12 @@
+# Kopier til terraform.tfvars og fyll inn verdier
+resource_group_name = "rg-webapp-lab-dev"
+app_name            = "webapp-DITT-NAVN-123"  # Må være unikt!
+location            = "norwayeast"
+sku_name            = "B1"
+environment         = "dev"
+
+tags = {
+  Project = "WebAppLab"
+  Course  = "DevOps"
+  Student = "DittNavn"
+}
