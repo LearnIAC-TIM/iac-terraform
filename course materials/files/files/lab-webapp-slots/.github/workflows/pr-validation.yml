@@ -1,0 +1,130 @@
+name: PR Validation (Ephemeral)
+
+on:
+  pull_request:
+    branches: [main]
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+jobs:
+  offline-tests:
+    name: 🔍 Offline Testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+      
+      - name: Run Offline Tests
+        run: bash scripts/test-offline.sh
+
+  policy-tests:
+    name: 🔐 Policy & Compliance
+    runs-on: ubuntu-latest
+    needs: offline-tests
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+      
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init
+      
+      - name: Run Policy Tests
+        run: bash scripts/test-policy.sh
+
+  preview-deploy:
+    name: 🚀 Preview Deploy (Ephemeral)
+    runs-on: ubuntu-latest
+    needs: [offline-tests, policy-tests]
+    environment:
+      name: pr-preview
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      
+      - name: Deploy Preview Environment
+        run: |
+          cd terraform
+          terraform init
+          terraform apply -auto-approve \
+            -var="prefix=pr-${{ github.event.pull_request.number }}" \
+            -var="resource_group_name=rg-webapp-pr-${{ github.event.pull_request.number }}"
+      
+      - name: Get Outputs
+        id: tf-outputs
+        run: |
+          cd terraform
+          echo "webapp_name=$(terraform output -raw webapp_name)" >> $GITHUB_OUTPUT
+          echo "webapp_url=$(terraform output -raw webapp_url)" >> $GITHUB_OUTPUT
+      
+      - name: Verification Tests
+        run: |
+          bash scripts/test-verify.sh \
+            ${{ steps.tf-outputs.outputs.webapp_name }} \
+            rg-webapp-pr-${{ github.event.pull_request.number }}
+      
+      - name: Deploy Application
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ steps.tf-outputs.outputs.webapp_name }}
+          package: ./app
+      
+      - name: Health Check
+        run: |
+          bash scripts/test-health.sh ${{ steps.tf-outputs.outputs.webapp_url }}
+      
+      - name: Cleanup (on failure)
+        if: failure()
+        run: |
+          cd terraform
+          terraform destroy -auto-approve \
+            -var="prefix=pr-${{ github.event.pull_request.number }}" \
+            -var="resource_group_name=rg-webapp-pr-${{ github.event.pull_request.number }}"
+
+  cleanup-preview:
+    name: 🧹 Cleanup Preview
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      
+      - name: Destroy Preview Environment
+        run: |
+          cd terraform
+          terraform init
+          terraform destroy -auto-approve \
+            -var="prefix=pr-${{ github.event.pull_request.number }}" \
+            -var="resource_group_name=rg-webapp-pr-${{ github.event.pull_request.number }}"

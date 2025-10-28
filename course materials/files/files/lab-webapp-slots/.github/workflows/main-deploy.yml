@@ -1,0 +1,121 @@
+name: Main Deploy (Persistent)
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * 1'  # Ukentlig rebuild (mandag 02:00)
+  workflow_dispatch:  # Manuell trigger
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+jobs:
+  test-and-build:
+    name: 🧪 Test & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Offline Tests
+        run: bash scripts/test-offline.sh
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      
+      - name: Policy Tests
+        run: |
+          cd terraform
+          terraform init
+          cd ..
+          bash scripts/test-policy.sh
+
+  deploy-infrastructure:
+    name: 🏗️  Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: test-and-build
+    environment: production
+    outputs:
+      webapp_name: ${{ steps.tf-outputs.outputs.webapp_name }}
+      resource_group: ${{ steps.tf-outputs.outputs.resource_group }}
+      staging_url: ${{ steps.tf-outputs.outputs.staging_url }}
+      prod_url: ${{ steps.tf-outputs.outputs.prod_url }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      
+      - name: Terraform Apply
+        run: |
+          cd terraform
+          terraform init
+          terraform apply -auto-approve
+      
+      - name: Get Outputs
+        id: tf-outputs
+        run: |
+          cd terraform
+          echo "webapp_name=$(terraform output -raw webapp_name)" >> $GITHUB_OUTPUT
+          echo "resource_group=$(terraform output -raw resource_group_name)" >> $GITHUB_OUTPUT
+          echo "staging_url=$(terraform output -raw staging_url)" >> $GITHUB_OUTPUT
+          echo "prod_url=$(terraform output -raw webapp_url)" >> $GITHUB_OUTPUT
+      
+      - name: Verify Infrastructure
+        run: |
+          bash scripts/test-verify.sh \
+            ${{ steps.tf-outputs.outputs.webapp_name }} \
+            ${{ steps.tf-outputs.outputs.resource_group }}
+
+  deploy-to-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to Staging Slot
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ needs.deploy-infrastructure.outputs.webapp_name }}
+          slot-name: staging
+          package: ./app
+      
+      - name: Staging Health Check
+        run: |
+          bash scripts/test-health.sh \
+            ${{ needs.deploy-infrastructure.outputs.staging_url }} \
+            staging
+
+  swap-to-production:
+    name: ♻️  Swap to Production
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, deploy-to-staging]
+    environment: production-swap
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Slot Swap
+        run: |
+          bash scripts/swap-slots.sh \
+            ${{ needs.deploy-infrastructure.outputs.webapp_name }} \
+            ${{ needs.deploy-infrastructure.outputs.resource_group }}
+      
+      - name: Production Health Check
+        run: |
+          bash scripts/test-health.sh \
+            ${{ needs.deploy-infrastructure.outputs.prod_url }} \
+            production
