@@ -1,13 +1,13 @@
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.0"
+      version = "~> 4.0"
     }
   }
-  
+
   backend "azurerm" {
     # Konfigurasjon kommer fra shared/backend.hcl
   }
@@ -22,7 +22,7 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
-  
+
   # Bruk environment variables eller federated credentials
   use_oidc = true
 }

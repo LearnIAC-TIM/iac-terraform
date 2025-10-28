@@ -12,19 +12,18 @@ resource "azurerm_storage_account" "main" {
   location                 = azurerm_resource_group.main.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
-  
+
   # Sikkerhet
-  enable_https_traffic_only       = true
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
-  
+
   tags = var.tags
 }
 
 # Storage Container
 resource "azurerm_storage_container" "data" {
   name                  = "data"
-  storage_account_name  = azurerm_storage_account.main.name
+  storage_account_id    = azurerm_storage_account.main.id
   container_access_type = "private"
 }
 
