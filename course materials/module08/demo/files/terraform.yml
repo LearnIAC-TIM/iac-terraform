@@ -1,0 +1,206 @@
+name: 'Terraform CI/CD'
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'environments/dev/**'
+      - 'modules/**'
+      - '.github/workflows/terraform.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'environments/dev/**'
+      - 'modules/**'
+
+permissions:
+  id-token: write  # Required for OIDC authentication
+  contents: read
+  pull-requests: write
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  WORKING_DIR: ./environments/dev
+
+jobs:
+  terraform-validate:
+    name: 'Validate'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+    
+    - name: Terraform Format Check
+      working-directory: ${{ env.WORKING_DIR }}
+      run: terraform fmt -check -recursive
+      continue-on-error: true
+    
+    - name: Terraform Init
+      working-directory: ${{ env.WORKING_DIR }}
+      run: terraform init -backend=false
+    
+    - name: Terraform Validate
+      working-directory: ${{ env.WORKING_DIR }}
+      run: terraform validate
+
+  terraform-security:
+    name: 'Security Scan'
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Run Checkov
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: .
+        framework: terraform
+        output_format: sarif
+        output_file_path: checkov-results.sarif
+        soft_fail: true
+    
+    - name: Upload Checkov results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: checkov-results.sarif
+
+  terraform-plan:
+    name: 'Plan'
+    runs-on: ubuntu-latest
+    needs: [terraform-validate, terraform-security]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Azure Login with OIDC
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+    
+    - name: Terraform Init
+      working-directory: ${{ env.WORKING_DIR }}
+      run: |
+        terraform init \
+          -backend-config="resource_group_name=${{ secrets.BACKEND_RESOURCE_GROUP }}" \
+          -backend-config="storage_account_name=${{ secrets.BACKEND_STORAGE_ACCOUNT }}" \
+          -backend-config="container_name=${{ secrets.BACKEND_CONTAINER_NAME }}"
+    
+    - name: Terraform Plan
+      working-directory: ${{ env.WORKING_DIR }}
+      run: terraform plan -no-color -out=tfplan
+      env:
+        TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        TF_VAR_resource_group_name: ${{ secrets.RESOURCE_GROUP_NAME }}
+        TF_VAR_key_vault_name: ${{ secrets.KEY_VAULT_NAME }}
+        TF_VAR_project_name: ${{ secrets.PROJECT_NAME }}
+        TF_VAR_database_admin_password: ${{ secrets.DB_ADMIN_PASSWORD }}
+    
+    - name: Comment Plan on PR
+      uses: actions/github-script@v7
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `#### Terraform Plan 📖
+          <details><summary>Show Plan</summary>
+          
+          \`\`\`terraform
+          ${process.env.PLAN}
+          \`\`\`
+          
+          </details>
+          
+          *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+  terraform-apply:
+    name: 'Apply'
+    runs-on: ubuntu-latest
+    needs: [terraform-validate, terraform-security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: development
+      url: ${{ steps.apply.outputs.app_url }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Azure Login with OIDC
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+        terraform_wrapper: false
+    
+    - name: Terraform Init
+      working-directory: ${{ env.WORKING_DIR }}
+      run: |
+        terraform init \
+          -backend-config="resource_group_name=${{ secrets.BACKEND_RESOURCE_GROUP }}" \
+          -backend-config="storage_account_name=${{ secrets.BACKEND_STORAGE_ACCOUNT }}" \
+          -backend-config="container_name=${{ secrets.BACKEND_CONTAINER_NAME }}"
+    
+    - name: Terraform Apply
+      id: apply
+      working-directory: ${{ env.WORKING_DIR }}
+      run: |
+        terraform apply -auto-approve -no-color
+        echo "app_url=$(terraform output -raw app_service_url)" >> $GITHUB_OUTPUT
+      env:
+        TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        TF_VAR_resource_group_name: ${{ secrets.RESOURCE_GROUP_NAME }}
+        TF_VAR_key_vault_name: ${{ secrets.KEY_VAULT_NAME }}
+        TF_VAR_project_name: ${{ secrets.PROJECT_NAME }}
+        TF_VAR_database_admin_password: ${{ secrets.DB_ADMIN_PASSWORD }}
+    
+    - name: Post deployment info
+      run: |
+        echo "🚀 Deployment successful!"
+        echo "App URL: ${{ steps.apply.outputs.app_url }}"
+    
+    - name: Create deployment summary
+      run: |
+        echo "### Terraform Apply Successful! 🚀" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**App URL:** ${{ steps.apply.outputs.app_url }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment:** development" >> $GITHUB_STEP_SUMMARY
+        echo "**Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

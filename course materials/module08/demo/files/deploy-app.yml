@@ -1,0 +1,128 @@
+name: 'Deploy Application'
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'sample-app/**'
+      - '.github/workflows/deploy-app.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_WEBAPP_PACKAGE_PATH: './sample-app'
+  NODE_VERSION: '18.x'
+
+jobs:
+  build:
+    name: 'Build'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+      run: |
+        npm ci --production
+    
+    - name: Create deployment package
+      working-directory: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+      run: |
+        # Create package with only necessary files
+        mkdir -p ../deploy-package
+        cp -r node_modules ../deploy-package/
+        cp package.json ../deploy-package/
+        cp server.js ../deploy-package/
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: node-app
+        path: deploy-package/
+        retention-days: 1
+
+  deploy:
+    name: 'Deploy to Azure'
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: development
+      url: ${{ steps.deploy.outputs.webapp-url }}
+    
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: node-app
+        path: ./app
+    
+    - name: Azure Login with OIDC
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    
+    - name: Deploy to Azure Web App
+      id: deploy
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        package: ./app
+    
+    - name: Test deployment
+      run: |
+        echo "Testing deployment..."
+        sleep 30  # Wait for app to start
+        
+        APP_URL="${{ steps.deploy.outputs.webapp-url }}"
+        
+        # Health check
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/")
+        if [ $RESPONSE -eq 200 ]; then
+          echo "✓ Health check passed"
+        else
+          echo "✗ Health check failed (HTTP $RESPONSE)"
+          exit 1
+        fi
+        
+        # Database health check
+        DB_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/health/db")
+        if [ $DB_RESPONSE -eq 200 ]; then
+          echo "✓ Database health check passed"
+        else
+          echo "⚠ Database health check failed (HTTP $DB_RESPONSE)"
+          echo "This is expected if database connection is not yet configured"
+        fi
+    
+    - name: Create deployment summary
+      run: |
+        echo "### Application Deployment Successful! 🎉" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**App URL:** ${{ steps.deploy.outputs.webapp-url }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Endpoints:**" >> $GITHUB_STEP_SUMMARY
+        echo "- Health: ${{ steps.deploy.outputs.webapp-url }}/" >> $GITHUB_STEP_SUMMARY
+        echo "- DB Health: ${{ steps.deploy.outputs.webapp-url }}/health/db" >> $GITHUB_STEP_SUMMARY
+        echo "- API Items: ${{ steps.deploy.outputs.webapp-url }}/api/items" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Deployed by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+    
+    - name: Post deployment actions
+      run: |
+        echo "🚀 Deployment complete!"
+        echo "Visit your app at: ${{ steps.deploy.outputs.webapp-url }}"

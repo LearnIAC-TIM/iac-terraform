@@ -1,0 +1,97 @@
+# Terraform Variables - Example Template
+# Kopier denne filen til terraform.tfvars og fyll inn dine verdier
+# IKKE commit terraform.tfvars til Git (den inneholder sensitiv info)!
+
+# ============================================
+# Azure Configuration
+# ============================================
+
+subscription_id      = "00000000-0000-0000-0000-000000000000"  # Erstatt med din subscription ID
+resource_group_name  = "student01-rg"                           # Erstatt med din RG navn
+location             = "norwayeast"                             # norwayeast, norwaywest, westeurope, northeurope
+
+# ============================================
+# Existing Resources
+# ============================================
+
+key_vault_name = "student01-kv"  # Erstatt med ditt Key Vault navn
+
+# ============================================
+# Project Configuration
+# ============================================
+
+project_name = "student01"  # Ditt unike prosjektnavn (3-12 tegn)
+environment  = "dev"        # dev, staging, eller prod
+
+# Tilleggstags (valgfritt)
+tags = {
+  Owner       = "Student Name"
+  Course      = "Infrastructure as Code"
+  CostCenter  = "Education"
+}
+
+# ============================================
+# Networking Configuration
+# ============================================
+
+vnet_address_space  = ["10.0.0.0/16"]
+app_subnet_address  = ["10.0.1.0/24"]
+db_subnet_address   = ["10.0.2.0/24"]
+
+# ============================================
+# App Service Configuration
+# ============================================
+
+app_service_sku     = "B1"      # B1, B2, S1, S2, P1v2, P2v2
+app_runtime_stack   = "node"    # node, python, dotnet, java, php
+app_runtime_version = "18-lts"  # Avhenger av runtime_stack
+                                # Node: 16-lts, 18-lts, 20-lts
+                                # Python: 3.9, 3.10, 3.11, 3.12
+                                # .NET: 6.0, 7.0, 8.0
+
+# Health check endpoint (må matche din app)
+health_check_path = "/"
+
+# Tilleggs environment variables for din app (valgfritt)
+app_settings = {
+  "NODE_ENV"           = "production"
+  "WEBSITE_NODE_DEFAULT_VERSION" = "~18"
+  # Legg til flere etter behov
+}
+
+# ============================================
+# Database Configuration
+# ============================================
+
+database_sku                  = "B_Standard_B1ms"  # Burstable Basic tier
+database_storage_mb           = 32768              # 32 GB (minimum)
+database_version              = "14"               # PostgreSQL versjon: 11, 12, 13, 14, 15
+database_name                 = "appdb"            # Database navn
+database_admin_username       = "dbadmin"          # Admin brukernavn
+database_admin_password       = "YourSecureP@ssw0rd123!"  # Bytt til sterkt passord!
+database_backup_retention_days = 7                 # 7-35 dager
+database_geo_redundant_backup = false              # true for produksjon
+
+# ============================================
+# Monitoring Configuration
+# ============================================
+
+log_retention_days = 30  # 30, 60, 90, 120, 180, 270, 365, 550, 730
+
+# ============================================
+# VIKTIG SIKKERHETSINFORMASJON
+# ============================================
+# 
+# 1. ALDRI commit terraform.tfvars til Git!
+# 2. Bruk sterke passord for database_admin_password
+# 3. Rotation av passord regelmessig
+# 4. Bruk Azure Key Vault for å lagre passord
+# 5. Begrens tilgang til backend storage account
+# 
+# Legg til i .gitignore:
+# terraform.tfvars
+# *.tfvars (unntatt *.tfvars.example)
+# .terraform/
+# *.tfstate
+# *.tfstate.backup
+#
