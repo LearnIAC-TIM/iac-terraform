@@ -1,0 +1,14 @@
+# Kopier til terraform.tfvars og fyll inn dine verdier
+# IKKE commit terraform.tfvars til Git!
+
+student_name = "student01"
+environment  = "dev"
+location     = "norwayeast"
+
+# Valgfrie tilpassede tags
+# tags = {
+#   ManagedBy   = "Terraform"
+#   Course      = "IaC-2025"
+#   Environment = "dev"
+#   Student     = "student01"
+# }

@@ -1,0 +1,10 @@
+# Template - kopier til backend.hcl og fyll inn dine verdier
+# IKKE commit backend.hcl til Git!
+
+resource_group_name  = "rg-<DITT_STUDENTNUMMER>-tfstate"
+storage_account_name = "st<STUDENTNR>tfstate"
+container_name       = "tfstate"
+key                  = "PROJECT_NAME/terraform.tfstate"  # Endres per prosjekt
+
+# Autentisering via Service Principal (federated credentials)
+use_oidc             = true
