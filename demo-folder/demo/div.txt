@@ -1,0 +1,45 @@
+# Checkov konfigurasjon for dev-miljø testing
+
+# Skip checks som ikke er relevante for dev-miljø
+skip-check:
+  - CKV_AZURE_206  # Storage replication - LRS er OK for dev
+
+# Eller mer spesifikk: skip bare for dev-miljø
+# conditional-skip:
+#   - check: CKV_AZURE_206
+#     condition: var.environment == "dev"
+
+
+
+# Checkov vil automatisk lese .checkov.yml
+checkov -d .
+
+# Eller eksplisitt
+checkov -d . --config-file .checkov.yml
+
+
+Lag forskjellige konfigurasjonsfiler per miljø:
+.checkov.dev.yml:
+yamlskip-check:
+  - CKV_AZURE_206  # LRS for dev
+  - CKV_AZURE_35   # Network rules (kan være relaxed i dev)
+
+  .checkov.prod.yml:
+yaml# Ingen skips - full scanning for prod
+
+# Dev
+checkov -d . --config-file .checkov.dev.yml
+
+# Prod
+checkov -d . --config-file .checkov.prod.yml
+
+
+For rask testing:
+bash# Skip spesifikk check
+checkov -d . --skip-check CKV_AZURE_206
+
+# Skip flere checks
+checkov -d . --skip-check CKV_AZURE_206,CKV_AZURE_35
+
+# Eller soft-fail (vis advarsler, men fail ikke)
+checkov -d . --soft-fail

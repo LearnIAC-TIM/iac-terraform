@@ -1,0 +1,2 @@
+yamlskip-check:
+  - CKV_AZURE_206  # LRS for dev
