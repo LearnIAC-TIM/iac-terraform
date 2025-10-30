@@ -83,10 +83,11 @@ touch .tflint.hcl
 Åpne `.tflint.hcl` og lim inn følgende **minimale konfigurasjon**:
 ```hcl
 # .tflint.hcl - Minimal konfigurasjon for å komme i gang
+# Se Github repo for å sikre at en får med siste versjon: [TFLint Ruleset for terraform-provider-azurerm](https://github.com/terraform-linters/tflint-ruleset-azurerm)
 
 plugin "azurerm" {
   enabled = true
-  version = "0.27.0"
+  version = "0.29.0"
   source  = "github.com/terraform-linters/tflint-ruleset-azurerm"
 }
 ```
@@ -516,10 +517,6 @@ no-color: false
 - **Core regler:** https://github.com/terraform-linters/tflint/tree/master/docs/rules
 - **Azure regler:** https://github.com/terraform-linters/tflint-ruleset-azurerm/tree/master/docs/rules
 
-**🔍 Liste regler i terminalen:**
-```bash
-tflint --list-rules
-```
 
 **📖 Siste versjon av Azure plugin:**
 https://github.com/terraform-linters/tflint-ruleset-azurerm/releases

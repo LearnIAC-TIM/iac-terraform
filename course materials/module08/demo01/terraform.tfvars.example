@@ -1,0 +1,6 @@
+# Kopier til terraform.tfvars og fyll inn dine verdier
+# IKKE commit terraform.tfvars til Git!
+
+student_identifier = ""
+environment        = ""
+location           = ""

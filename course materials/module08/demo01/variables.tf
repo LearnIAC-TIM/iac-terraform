@@ -1,5 +1,5 @@
 variable "student_identifier" {
-  description = "Ditt student-brukernavn(brukes i naming - kom gjerne på et unikt navn)"
+  description = "Unik studentidentifikator (brukernavn)"
   type        = string
 }
 
