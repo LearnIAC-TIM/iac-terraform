@@ -280,7 +280,7 @@ Nå skal du ha færre feil! 🎉
 
 ---
 
-## Del 3: Test mot din infrastruktur
+## Del 3: Test mot ekesempelinfrastruktur
 
 ### Eksempel: Storage Account med Container
 
