@@ -170,76 +170,12 @@ Etter installasjon, verifiser at alt fungerer:
 # Sjekk versjon
 tflint --version
 
-# Kjør i en Terraform-mappe
-tflint --init
-tflint
-```
-
 ### Checkov
 ```bash
 # Sjekk versjon
 checkov --version
 
-# Test på en Terraform-fil
-checkov -f main.tf
-
-# Scan hele mappen
-checkov -d .
-```
-
----
-
-## Oppsett og Konfigurasjon
-
-### TFLint Konfigurasjon
-
-Opprett `.tflint.hcl` i prosjektmappen:
-```hcl
-plugin "azurerm" {
-  enabled = true
-  version = "0.25.1"
-  source  = "github.com/terraform-linters/tflint-ruleset-azurerm"
-}
-
-rule "terraform_naming_convention" {
-  enabled = true
-}
-
-rule "terraform_documented_variables" {
-  enabled = true
-}
-
-rule "terraform_typed_variables" {
-  enabled = true
-}
-```
-
-**Initialiser plugins:**
-```bash
-tflint --init
-```
-
-### Checkov Konfigurasjon
-
-Opprett `.checkov.yaml` i prosjektmappen (valgfritt):
-```yaml
-framework:
-  - terraform
-
-output: cli
-
-soft-fail: false
-
-skip-check:
-  # Eksempel: Skip spesifikke sjekker hvis nødvendig
-  # - CKV_AZURE_1
-
-compact: true
-
-quiet: false
-```
-
-### Integrere i Git Hooks (Pre-commit)
+### Integrere i Git Hooks (Pre-commit) - IKKE VIST I VIDEO - Ekstra for den som ønsker å se på det
 
 **Installer pre-commit:**
 
@@ -270,37 +206,6 @@ repos:
 **Aktiver pre-commit:**
 ```bash
 pre-commit install
-```
-
----
-
-## Nyttige Kommandoer
-
-### TFLint
-```bash
-# Scan med detaljert output
-tflint --format=compact
-
-# Scan bestemt fil
-tflint main.tf
-
-# Ignore spesifikke regler
-tflint --disable-rule=terraform_unused_declarations
-```
-
-### Checkov
-```bash
-# Scan med spesifikt framework
-checkov -d . --framework terraform
-
-# Output til JSON
-checkov -d . -o json
-
-# Skip spesifikke sjekker
-checkov -d . --skip-check CKV_AZURE_1,CKV_AZURE_2
-
-# Vis kun feil (ikke advarsler)
-checkov -d . --compact --quiet
 ```
 
 ---

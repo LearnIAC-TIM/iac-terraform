@@ -2,7 +2,7 @@
 resource "azurerm_resource_group" "main" {
   name     = "rg-${var.student_identifier}-${var.environment}"
   location = var.location
-  tags = var.tags
+  tags     = var.tags
 }
 
 # Storage Account
@@ -14,6 +14,7 @@ resource "azurerm_storage_account" "main" {
   account_replication_type = "LRS"
 
   # Sikkerhet
+  public_network_access_enabled   = false
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
 
