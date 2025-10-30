@@ -6,8 +6,8 @@ framework:
 
 skip-check:
   # Storage - LRS er akseptabelt for dev/test
-#  - CKV_AZURE_206
-#  - CKV_AZURE_59
+  # - CKV_AZURE_206  # Storage account replication (LRS akseptabelt i dev)
+  # - CKV_AZURE_59   # Storage account secure transfer (valgfritt i dev)
   
   # Andre dev-akseptable skips (valgfritt)
   # - CKV_AZURE_35   # Network rules kan være mindre strenge i dev

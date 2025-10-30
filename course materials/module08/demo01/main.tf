@@ -2,7 +2,6 @@
 resource "azurerm_resource_group" "main" {
   name     = "rg-${var.student_identifier}-${var.environment}"
   location = var.location
-  tags     = var.tags
 }
 
 # Storage Account

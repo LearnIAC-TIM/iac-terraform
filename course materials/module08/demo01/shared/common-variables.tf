@@ -5,9 +5,9 @@ variable "common_tags" {
   description = "Standard tags for alle ressurser i alle prosjekter"
   type        = map(string)
   default = {
-    ManagedBy   = "Terraform"
-    Course      = "IaC-2025"
-    University  = "NTNU"
+    ManagedBy  = "Terraform"
+    Course     = "IaC-2025"
+    University = "NTNU"
   }
 }
 

@@ -27,5 +27,3 @@ provider "azurerm" {
   use_oidc = true
 }
 
-# Hent nåværende Azure context
-data "azurerm_client_config" "current" {}
