@@ -1,2 +1,23 @@
-yamlskip-check:
-  - CKV_AZURE_206  # LRS for dev
+# Checkov konfigurasjon for student-prosjekter
+# Dette er dev/test-miljøer, så vi tillater noen avvik fra prod-standarder
+
+framework:
+  - terraform
+
+skip-check:
+  # Storage - LRS er akseptabelt for dev/test
+#  - CKV_AZURE_206
+#  - CKV_AZURE_59
+  
+  # Andre dev-akseptable skips (valgfritt)
+  # - CKV_AZURE_35   # Network rules kan være mindre strenge i dev
+  # - CKV_AZURE_43   # Storage account public access (hvis du trenger det for testing)
+
+# Soft-fail mode - vis advarsler, men ikke fail build
+soft-fail: false
+
+# Kompakt output
+compact: true
+
+# Vis kun feilede checks
+quiet: false
