@@ -1,0 +1,94 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    branches: 
+      - main
+    paths:
+      - "course materials/module08/demo01/**"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      WORKDIR: "course materials/module08/demo01"
+      BACKEND_HCL: "course materials/module08/demo01/shared/backend.hcl"
+      TF_INPUT: "false"
+      TF_IN_AUTOMATION: "true"
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.3
+          terraform_wrapper: false
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Export ARM_* for Terraform (OIDC)
+        run: |
+          {
+            echo "ARM_USE_OIDC=true"
+            echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}"
+            echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}"
+            echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Terraform Format Check
+        working-directory: ${{ env.WORKDIR }}
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Init
+        working-directory: ${{ env.WORKDIR }}
+        id: init
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/${{ env.BACKEND_HCL }}" \
+            -backend-config="key=projects/storageaccount/dev/dev.tfstate" \
+            -input=false \
+            -no-color
+      
+      - name: Terraform Validate
+        working-directory: ${{ env.WORKDIR }}
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6.2.1
+        with:
+          tflint_version: latest
+
+      - name: Initialize TFLint
+        run: tflint --init
+
+      - name: Run TFLint
+        working-directory: ${{ env.WORKDIR }}
+        id: tflint
+        run: tflint -f compact
+
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf
+        with:
+          directory: .
+          framework: terraform
+          quiet: true
+          compact: true
+          output_format: sarif
+          output_file_path: results.sarif
+          soft_fail: false
