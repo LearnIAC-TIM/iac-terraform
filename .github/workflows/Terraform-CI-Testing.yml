@@ -5,7 +5,7 @@ on:
     branches: 
       - main
     paths:
-      - "module08/demo01/**"
+      - "course materials/module08/demo01/**"
   workflow_dispatch:
 
 permissions:
@@ -19,8 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     env:
-      WORKDIR: "module08/demo01"
-      BACKEND_HCL: "module08/demo01/shared/backend.hcl"
+      WORKDIR: "course materials/module08/demo01"
+      BACKEND_HCL: "course materials/module08/demo01/shared/backend.hcl"
       TF_INPUT: "false"
       TF_IN_AUTOMATION: "true"
       
@@ -85,17 +85,14 @@ jobs:
         id: tflint
         run: tflint -f compact
 
-      - name: Checkov
-        uses: bridgecrewio/checkov-action@v12.1347.0
-        with:
-          directory: ${{ env.WORKDIR }}
-          framework: terraform
-          quiet: true
-          output_format: sarif
-          soft_fail: false
+      - name: Setup Python and Checkov
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y python3-pip
+          pip install --upgrade pip
+          pip install checkov
 
-      # Valgfritt: last opp SARIF for å få Code Scanning-annotasjoner i PR
-      # - name: Upload SARIF
-      #   uses: github/codeql-action/upload-sarif@v3
-      #   with:
-      #     sarif_file: ${{ env.WORKDIR }}/results.sarif
+      - name: Run Checkov
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          checkov -d . --framework terraform --quiet --compact --output sarif --output-file-path results.sarif
