@@ -84,12 +84,10 @@ jobs:
         run: tflint -f compact
 
       - name: Checkov
-        uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf
+        uses: bridgecrewio/checkov-action@v12.1347.0
         with:
           directory: .
           framework: terraform
           quiet: true
-          compact: true
           output_format: sarif
-          output_file_path: results.sarif
           soft_fail: false
