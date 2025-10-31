@@ -95,4 +95,4 @@ jobs:
       - name: Run Checkov
         working-directory: ${{ env.WORKDIR }}
         run: |
-          checkov -d . --framework terraform --quiet --compact --output sarif --output-file-path results.sarif
+          checkov -d . --framework terraform --compact --output cli
