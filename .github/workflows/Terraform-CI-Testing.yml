@@ -12,6 +12,7 @@ permissions:
   id-token: write
   contents: read
   pull-requests: write
+  security-events: write  # anbefalt dersom du senere vil laste opp SARIF
 
 jobs:
   validate:
@@ -61,7 +62,7 @@ jobs:
         run: |
           terraform init \
             -backend-config="${{ github.workspace }}/${{ env.BACKEND_HCL }}" \
-            -backend-config="key=key=project/demo01/terraform.tfstate" \
+            -backend-config="key=project/demo01/terraform.tfstate" \
             -input=false \
             -no-color
       
@@ -76,6 +77,7 @@ jobs:
           tflint_version: latest
 
       - name: Initialize TFLint
+        working-directory: ${{ env.WORKDIR }}
         run: tflint --init
 
       - name: Run TFLint
@@ -86,8 +88,14 @@ jobs:
       - name: Checkov
         uses: bridgecrewio/checkov-action@v12.1347.0
         with:
-          directory: .
+          directory: ${{ env.WORKDIR }}
           framework: terraform
           quiet: true
           output_format: sarif
           soft_fail: false
+
+      # Valgfritt: last opp SARIF for å få Code Scanning-annotasjoner i PR
+      # - name: Upload SARIF
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   with:
+      #     sarif_file: ${{ env.WORKDIR }}/results.sarif
