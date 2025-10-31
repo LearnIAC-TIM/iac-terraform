@@ -61,7 +61,7 @@ jobs:
         run: |
           terraform init \
             -backend-config="${{ github.workspace }}/${{ env.BACKEND_HCL }}" \
-            -backend-config="key=projects/storageaccount/dev/dev.tfstate" \
+            -backend-config="key=key=project/demo01/terraform.tfstate" \
             -input=false \
             -no-color
       
