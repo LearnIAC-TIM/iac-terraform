@@ -1,4 +1,4 @@
-name: Terraform CI
+name: Terraform CI - TFlint/Checkov
 
 on:
   pull_request:
