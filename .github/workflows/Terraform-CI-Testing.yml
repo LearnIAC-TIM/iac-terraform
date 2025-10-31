@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "course materials/module08/demo01/**"
+  workflow_dispatch:
 
 permissions:
   id-token: write
