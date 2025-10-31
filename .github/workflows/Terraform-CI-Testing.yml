@@ -88,7 +88,7 @@ jobs:
       - name: Checkov
         uses: bridgecrewio/checkov-action@v12.1347.0
         with:
-          directory: ${{ env.WORKDIR }}
+          directory: "${{ env.WORKDIR }}"
           framework: terraform
           quiet: true
           output_format: sarif
