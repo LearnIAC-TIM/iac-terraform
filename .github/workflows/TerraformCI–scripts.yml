@@ -1,0 +1,102 @@
+name: Terraform CI – scripts
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "course materials/module08/demo01/**"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  security-events: write   # nødvendig for å laste opp SARIF (annotasjoner i PR)
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      WORKDIR: "course materials/module08/demo01"
+      BACKEND_HCL: "course materials/module08/demo01/shared/backend.hcl"
+      STATE_KEY: "project/demo01/terraform.tfstate"
+      TF_INPUT: "false"
+      TF_IN_AUTOMATION: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure scripts are executable
+        working-directory: ${{ env.WORKDIR }}/testscript
+        run: chmod +x *.sh
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.4
+          terraform_wrapper: false
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Export ARM_* for Terraform (OIDC)
+        run: |
+          {
+            echo "ARM_USE_OIDC=true"
+            echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}"
+            echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}"
+            echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Terraform fmt/init/validate (script)
+        working-directory: ${{ env.WORKDIR }}/testscript
+        run: ./terraform_fmt_validate.sh "${{ env.WORKDIR }}" "${{ env.BACKEND_HCL }}" "${{ env.STATE_KEY }}"
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6.2.1
+        with:
+          tflint_version: latest
+
+      - name: TFLint (script)
+        working-directory: ${{ env.WORKDIR }}/testscript
+        run: ./tflint_run.sh "${{ env.WORKDIR }}"
+
+      - name: Setup Python and Checkov
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y python3-pip
+          pip install --upgrade pip
+          pip install checkov
+
+      - name: Checkov scan (script, always produce SARIF)
+        id: checkov
+        continue-on-error: true
+        working-directory: ${{ env.WORKDIR }}/testscript
+        run: ./checkov_scan.sh "${{ env.WORKDIR }}" "results.sarif"
+
+      - name: Upload SARIF (Checkov) for PR annotations
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ env.WORKDIR }}/results.sarif
+          wait-for-processing: true
+
+      - name: Upload SARIF (Checkov) for PR annotations
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ env.WORKDIR }}/results.sarif
+          wait-for-processing: true
+
+      - name: Upload Checkov SARIF as artifact (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-report
+          path: ${{ env.WORKDIR }}/results.sarif/**
