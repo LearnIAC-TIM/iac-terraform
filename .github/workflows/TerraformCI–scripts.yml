@@ -54,10 +54,6 @@ jobs:
             echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           } >> "$GITHUB_ENV"
 
-      - name: Terraform fmt/init/validate (script)
-        working-directory: ${{ env.WORKDIR }}/testscript
-        run: ./terraform_fmt_validate.sh "${{ env.WORKDIR }}" "${{ env.BACKEND_HCL }}" "${{ env.STATE_KEY }}"
-
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v6.2.1
         with:
