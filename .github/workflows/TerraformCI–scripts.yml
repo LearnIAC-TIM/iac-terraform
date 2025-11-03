@@ -61,7 +61,8 @@ jobs:
 
       - name: TFLint (script)
         run: |
-          "${{ env.WORKDIR }}/testscript/tflint_run.sh" "${{ env.WORKDIR }}
+          ${{ env.WORKDIR }}/testscript/tflint_run.sh "${{ env.WORKDIR }}"
+
 
       - name: Setup Python and Checkov
         run: |
@@ -74,7 +75,7 @@ jobs:
         id: checkov
         continue-on-error: true
         run: |
-          "${{ env.WORKDIR }}/testscript/checkov_scan.sh" "${{ env.WORKDIR }}" "results.sarif"
+          ${{ env.WORKDIR }}/testscript/checkov_scan.sh "${{ env.WORKDIR }}" "results.sarif"
 
       - name: Upload SARIF (Checkov) for PR annotations
         if: always()
