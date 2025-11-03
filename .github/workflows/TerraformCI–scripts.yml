@@ -30,7 +30,12 @@ jobs:
 
       - name: Make testscripts executable
         working-directory: ${{ env.WORKDIR }}/testscript
-        run: chmod +x *.sh
+        run: |
+          echo "Gir kjørbar rettighet til alle .sh-filer:"
+          chmod -v +x *.sh
+          echo
+          echo "Bekreftede rettigheter etter endring:"
+          ls -l *.sh
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -61,7 +66,8 @@ jobs:
 
       - name: TFLint (script)
         working-directory: ${{ env.WORKDIR }}/testscript
-        run: ./tflint_run.sh
+        run: |
+          ./tflint_run.sh
 
       - name: Setup Python and Checkov
         run: |
