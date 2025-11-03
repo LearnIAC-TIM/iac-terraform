@@ -67,7 +67,7 @@ jobs:
       - name: TFLint (script)
         working-directory: ${{ env.WORKDIR }}/testscript
         run: |
-          ./tflint_run.sh
+          ./tflint_run.sh "${{ env.WORKDIR }}"
 
       - name: Setup Python and Checkov
         run: |

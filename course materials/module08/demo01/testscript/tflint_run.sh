@@ -10,7 +10,7 @@ if [[ -z "${WORKDIR_IN}" ]]; then
 fi
 
 WORKDIR_ABS="$(cd "${WORKDIR_IN}" 2>/dev/null && pwd -P)" || {
-  echo "Fann ikkje WORKDIR: ${WORKDIR_IN}" >&2
+  echo "Fant ikke WORKDIR: ${WORKDIR_IN}" >&2
   exit 3
 }
 
