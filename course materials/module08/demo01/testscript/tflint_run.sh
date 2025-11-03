@@ -3,23 +3,29 @@ set -euo pipefail
 
 # Bruk: ./tflint_run.sh <WORKDIR>
 
-WORKDIR="${1:-}"
-
-if [[ -z "$WORKDIR" ]]; then
+WORKDIR_IN="${1:-}"
+if [[ -z "${WORKDIR_IN}" ]]; then
   echo "Bruk: $0 <WORKDIR>" >&2
   exit 2
 fi
 
-echo "=== TFLint starter ==="
-echo "Arbeidskatalog: $WORKDIR"
+WORKDIR_ABS="$(cd "${WORKDIR_IN}" 2>/dev/null && pwd -P)" || {
+  echo "Fann ikkje WORKDIR: ${WORKDIR_IN}" >&2
+  exit 3
+}
+
+echo "=== TFLint ==="
+echo "Arbeidskatalog: ${WORKDIR_ABS}"
 echo
 
-# 1) Init TFLint (henter plugins)
+# Kjør inne i katalogen for å unngå --chdir og relative sti-problemer
+pushd "${WORKDIR_ABS}" >/dev/null
+
 echo "[1/2] tflint --init"
-tflint --chdir "$WORKDIR" --init
+tflint --init
 
-# 2) Kjør TFLint
 echo "[2/2] tflint -f compact"
-tflint --chdir "$WORKDIR" -f compact
+tflint -f compact
 
+popd >/dev/null
 echo "✅ TFLint fullført."
