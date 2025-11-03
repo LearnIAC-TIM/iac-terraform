@@ -80,11 +80,12 @@ jobs:
         id: checkov
         continue-on-error: true
         working-directory: ${{ env.WORKDIR }}/testscript
-        run: ./checkov_scan.sh "${{ env.WORKDIR }}" "results.sarif"
+        run: |
+          ./checkov_scan.sh "${{ env.WORKDIR }}" "results.sarif/checkov.sarif"
 
-      - name: Upload SARIF (Checkov)
+      - name: Upload SARIF (Checkov) for PR annotations
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: ${{ env.WORKDIR }}/results.sarif
+          sarif_file: ${{ env.WORKDIR }}/results.sarif/checkov.sarif
           wait-for-processing: true
