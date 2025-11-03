@@ -39,11 +39,7 @@ echo
 
 # Kjør Checkov og skriv både CLI og SARIF til en konkret fil
 set +e
-checkov -d "${WORKDIR_ABS}" \
-  --framework terraform \
-  --compact \
-  --output cli \
-  --output sarif --output-file-path "${SARIF_FILE_REL}"
+checkov -d "${WORKDIR_ABS}" --framework terraform --compact --output cli
 EXIT_CODE=$?
 set -e
 
