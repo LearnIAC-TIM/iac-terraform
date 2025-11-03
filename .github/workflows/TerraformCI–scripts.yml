@@ -28,9 +28,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ensure scripts are executable
-        working-directory: ${{ env.WORKDIR }}/testscript
-        run: chmod +x *.sh
+      - name: Make testscripts executable
+        run: |
+          chmod +x "${{ env.WORKDIR }}/testscript/"*.sh
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -60,8 +60,8 @@ jobs:
           tflint_version: latest
 
       - name: TFLint (script)
-        working-directory: ${{ env.WORKDIR }}/testscript
-        run: ./tflint_run.sh "${{ env.WORKDIR }}"
+        run: |
+          "${{ env.WORKDIR }}/testscript/tflint_run.sh" "${{ env.WORKDIR }}
 
       - name: Setup Python and Checkov
         run: |
@@ -73,15 +73,8 @@ jobs:
       - name: Checkov scan (script, always produce SARIF)
         id: checkov
         continue-on-error: true
-        working-directory: ${{ env.WORKDIR }}/testscript
-        run: ./checkov_scan.sh "${{ env.WORKDIR }}" "results.sarif"
-
-      - name: Upload SARIF (Checkov) for PR annotations
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: ${{ env.WORKDIR }}/results.sarif
-          wait-for-processing: true
+        run: |
+          "${{ env.WORKDIR }}/testscript/checkov_scan.sh" "${{ env.WORKDIR }}" "results.sarif"
 
       - name: Upload SARIF (Checkov) for PR annotations
         if: always()
