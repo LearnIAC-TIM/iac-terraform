@@ -1,0 +1,104 @@
+name: Terraform CI - TFlint-Checkov - Demo
+
+on:
+  pull_request:
+    branches: 
+      - main
+    paths:
+      - "course materials/module08/demo01/**"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  security-events: write  # anbefalt dersom du senere vil laste opp SARIF
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      WORKDIR: "course materials/module08/demo01"
+      BACKEND_HCL: "course materials/module08/demo01/shared/backend.hcl"
+      TF_INPUT: "false"
+      TF_IN_AUTOMATION: "true"
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v5.0.0
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2.0.3
+      with:
+        terraform_version: 1.13.4
+        terraform_wrapper: false
+
+    - name: Azure Login
+      uses: Azure/login@v2.3.0
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Export ARM_* for Terraform (OIDC)
+      run: |
+        {
+          echo "ARM_USE_OIDC=true"
+          echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}"
+          echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}"
+          echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+        } >> "$GITHUB_ENV"
+    
+    - name: Terraform Format Check
+      working-directory: ${{ env.WORKDIR }}
+      id: fmt
+      run: terraform fmt -check -recursive
+      continue-on-error: true
+
+    - name: Terraform Init
+      working-directory: ${{ env.WORKDIR }}
+      id: init
+      run: |
+        terraform init \
+          -backend-config="${{ github.workspace }}/${{ env.BACKEND_HCL }}" \
+          -backend-config="key=project/demo01/terraform.tfstate" \
+          -input=false \
+          -no-color
+      
+    - name: Terraform Validate
+      working-directory: ${{ env.WORKDIR }}
+      id: validate
+      run: terraform validate -no-color
+
+    - name: Setup TFLint
+      uses: terraform-linters/setup-tflint@v6.2.1
+      with:
+        tflint_version: latest
+
+    - name: Initialize TFLint
+      working-directory: ${{ env.WORKIDIR }}
+      run: tflint --init
+
+    - name: Run TFLint
+      working-directory: ${{ env.WORKIDIR }}
+      id: tflint
+      run: tflint -f compact
+
+    - name: Setup Python and Checkov
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y python3-pip
+        pip install --upgrade pip
+        pip install checkov
+
+    - name: Run Checkov
+      working-directory: ${{ env.WORKDIR }}
+      run: |
+        checkov -d . --framework terraform --compact --output cli --output sarif --output-file-path results.sarif
+
+    - name: Upload SARIF
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ env.WORKDIR }}/results.sarif
+          
