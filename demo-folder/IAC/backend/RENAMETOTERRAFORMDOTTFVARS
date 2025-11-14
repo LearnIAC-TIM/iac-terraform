@@ -18,4 +18,4 @@ service_principal_object_id  = ""
 user_object_id              = ""
 
 # subscription ID hvor ressurser skal opprettes.
-subscription_id = "7a3c6854-0fe1-42eb-b5b9-800af1e53d70"
+subscription_id = "SKRIV INN subscription_id HER"
