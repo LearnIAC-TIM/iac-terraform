@@ -261,7 +261,7 @@ Write-Host ""
 Write-Host "2️⃣ Creating artifact..." -ForegroundColor Yellow
 $ARTIFACT_NAME = "terraform-$VERSION.tar.gz"
 
-tar -czf $ARTIFACT_NAME terraform/ environments/ backend-configs/
+tar -czf $ARTIFACT_NAME terraform environments backend-configs/
 
 Write-Host "✅ Artifact created: $ARTIFACT_NAME" -ForegroundColor Green
 Write-Host ""

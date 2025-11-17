@@ -1,0 +1,21 @@
+# Resource Group
+resource_group_name = "SKRIVINNDINN_RESOURCEGROUPNAVN_HER"
+location            = "norwayeast"
+
+# Storage Account (må være globalt unikt - skriv noe som garantert ikke er tatt. Kun små bokstaver og tall)
+storage_account_name = "skrivetuniktnavnher12345"
+
+# Container for Terraform state
+container_name = "tfstate"
+
+# Key Vault (må være globalt unikt - skriv noe som garantert ikke er tatt. Kun små bokstaver, tall og bindestrek)
+key_vault_name = "kv-SKRIVDITTVALGTENAVNHER-123532"
+
+# Azure AD / EntraID informasjon (for tildeling av tilgang) For å få tak i denne informasjonen må en kjøre følgende kommandoer i terminalen i Azure CLI:
+# az ad sp list --display-name "NAVN PÅ APP REGISTRATION" --query "[].id" --output tsv
+# az ad user show --id <user-email> --query id
+service_principal_object_id  = ""
+user_object_id              = ""
+
+# subscription ID hvor ressurser skal opprettes.
+subscription_id = "SKRIV INN subscription_id HER"
