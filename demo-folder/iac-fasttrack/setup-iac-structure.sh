@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 
-# Oppretter rotmappe
+set -euo pipefail
+
 ROOT="iac-storage"
+
+echo "Oppretter rotmappe: $ROOT"
 mkdir -p "$ROOT"
 
-echo "Oppretter mappe: $ROOT"
-
-# Oppretter Terraform-rootmodul
+echo "Oppretter Terraform-rotmodul i $ROOT/terraform"
 mkdir -p "$ROOT/terraform"
 
-# Oppretter miljømapper
-mkdir -p "$ROOT/environments"
-mkdir -p "$ROOT/backends"
+echo "Oppretter miljømapper i $ROOT/environments/{dev,test,prod}"
+mkdir -p "$ROOT/environments/dev"
+mkdir -p "$ROOT/environments/test"
+mkdir -p "$ROOT/environments/prod"
 
 ###############################################
-# Oppretter Terraform-filer i terraform/
+# Terraform-rotmodul: terraform/
 ###############################################
 
 cat <<EOF > "$ROOT/terraform/versions.tf"
@@ -24,7 +26,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.0"
+      version = "~> 4.47"
     }
   }
 }
@@ -55,11 +57,13 @@ variable "storage_account_name" {
 variable "storage_account_tier" {
   type        = string
   default     = "Standard"
+  description = "Storage account tier (Standard/Premium)."
 }
 
 variable "storage_account_replication_type" {
   type        = string
   default     = "LRS"
+  description = "Replication type (LRS, GRS, RAGRS, ZRS, etc.)."
 }
 
 variable "container_name" {
@@ -69,7 +73,7 @@ variable "container_name" {
 
 variable "environment" {
   type        = string
-  description = "Environment name (dev/test/prod)."
+  description = "Environment name (dev, test, prod)."
 }
 EOF
 
@@ -112,71 +116,76 @@ EOF
 
 cat <<EOF > "$ROOT/terraform/outputs.tf"
 output "storage_account_id" {
-  value = azurerm_storage_account.this.id
+  value       = azurerm_storage_account.this.id
+  description = "The ID of the storage account."
 }
 
 output "storage_account_name" {
-  value = azurerm_storage_account.this.name
+  value       = azurerm_storage_account.this.name
+  description = "The name of the storage account."
 }
 
 output "container_name" {
-  value = azurerm_storage_container.this.name
+  value       = azurerm_storage_container.this.name
+  description = "The name of the container."
 }
 EOF
 
 ###############################################
 # Miljøspesifikke tfvars-filer
+# Plasseres i environments/<env>/<env>.tfvars
 ###############################################
 
-cat <<EOF > "$ROOT/environments/dev.tfvars"
-location                   = "northeurope"
-resource_group_name        = "rg-storage-dev"
-storage_account_name       = "stdev$RANDOM"
-storage_account_tier       = "Standard"
+cat <<EOF > "$ROOT/environments/dev/dev.tfvars"
+location                        = "northeurope"
+resource_group_name             = "rg-storage-dev"
+storage_account_name            = "stdev$RANDOM"
+storage_account_tier            = "Standard"
 storage_account_replication_type = "LRS"
-container_name             = "appdata-dev"
-environment                = "dev"
+container_name                  = "appdata-dev"
+environment                     = "dev"
 EOF
 
-cat <<EOF > "$ROOT/environments/test.tfvars"
-location                   = "northeurope"
-resource_group_name        = "rg-storage-test"
-storage_account_name       = "sttest$RANDOM"
-storage_account_tier       = "Standard"
+cat <<EOF > "$ROOT/environments/test/test.tfvars"
+location                        = "northeurope"
+resource_group_name             = "rg-storage-test"
+storage_account_name            = "sttest$RANDOM"
+storage_account_tier            = "Standard"
 storage_account_replication_type = "LRS"
-container_name             = "appdata-test"
-environment                = "test"
+container_name                  = "appdata-test"
+environment                     = "test"
 EOF
 
-cat <<EOF > "$ROOT/environments/prod.tfvars"
-location                   = "northeurope"
-resource_group_name        = "rg-storage-prod"
-storage_account_name       = "stprod$RANDOM"
-storage_account_tier       = "Standard"
+cat <<EOF > "$ROOT/environments/prod/prod.tfvars"
+location                        = "northeurope"
+resource_group_name             = "rg-storage-prod"
+storage_account_name            = "stprod$RANDOM"
+storage_account_tier            = "Standard"
 storage_account_replication_type = "GRS"
-container_name             = "appdata-prod"
-environment                = "prod"
+container_name                  = "appdata-prod"
+environment                     = "prod"
 EOF
 
 ###############################################
-# Backend-konfigurasjoner for dev/test/prod
+# Backend-konfigurasjon per miljø
+# Plasseres i environments/<env>/backend.hcl
 ###############################################
 
-cat <<EOF > "$ROOT/backends/backend-dev.hcl"
+cat <<EOF > "$ROOT/environments/dev/backend.hcl"
 resource_group_name  = "rg-iac-state"
 storage_account_name = "staciacstate001"
 container_name       = "tfstate"
 key                  = "storage/dev/terraform.tfstate"
 EOF
 
-cat <<EOF > "$ROOT/backends/backend-test.hcl"
+cat <<EOF > "$ROOT/environments/test/backend.hcl"
 resource_group_name  = "rg-iac-state"
 storage_account_name = "staciacstate001"
 container_name       = "tfstate"
 key                  = "storage/test/terraform.tfstate"
 EOF
 
-cat <<EOF > "$ROOT/backends/backend-prod.hcl"
+cat <<EOF > "$ROOT/environments/prod/backend.hcl"
 resource_group_name  = "rg-iac-state"
 storage_account_name = "staciacstate001"
 container_name       = "tfstate"
@@ -184,13 +193,45 @@ key                  = "storage/prod/terraform.tfstate"
 EOF
 
 ###############################################
-# Avslutning
+# Enkel README for studenten
 ###############################################
 
-echo "-----------------------------------------------------"
-echo "Ferdig!"
-echo "Oppsettet ble generert i mappen: $ROOT"
-echo "Klar til å brukes med:"
-echo "  terraform -chdir=terraform init -backend-config=../backends/backend-dev.hcl"
-echo "  terraform -chdir=terraform plan -var-file=../environments/dev.tfvars"
-echo "-----------------------------------------------------"
+cat <<'EOF' > "$ROOT/README.md"
+# iac-storage – enkel struktur for dev, test og prod
+
+Denne mappen inneholder et enkelt Terraform-oppsett for en ressursgruppe, en Storage Account og en container i Azure. Samme kode brukes for dev, test og prod. Miljøene skilles av egne backend-filer og egne tfvars-filer.
+
+## Strukturen
+
+- `terraform/`
+  - Felles Terraform-kode (root-modul):
+    - `versions.tf`
+    - `backend.tf`
+    - `variables.tf`
+    - `main.tf`
+    - `outputs.tf`
+- `environments/dev`
+  - `backend.hcl` – backend-konfigurasjon for dev-state
+  - `dev.tfvars` – variabler for dev-miljøet
+- `environments/test`
+  - `backend.hcl` – backend-konfigurasjon for test-state
+  - `test.tfvars` – variabler for test-miljøet
+- `environments/prod`
+  - `backend.hcl` – backend-konfigurasjon for prod-state
+  - `prod.tfvars` – variabler for prod-miljøet
+
+## Eksempelkommandoer
+
+Fra rotmappen `iac-storage`:
+
+### Dev
+
+```bash
+terraform -chdir=terraform init \
+  -backend-config="../environments/dev/backend.hcl"
+
+terraform -chdir=terraform plan \
+  -var-file="../environments/dev/dev.tfvars"
+
+terraform -chdir=terraform apply \
+  -var-file="../environments/dev/dev.tfvars"
