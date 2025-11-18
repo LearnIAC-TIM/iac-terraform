@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: 
       name: dev
-          
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,7 +92,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}/terraform
         run: |
           terraform init \
-            -backend-config="${{ github.workspace }}/environments/dev/backend-dev.hcl" \
+          -backend-config="${{ github.workspace }}/demo-folder/iac-fasttrack/environments/dev/backend-dev.hcl" \
             -input=false \
             -no-color
       
