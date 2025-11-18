@@ -1,0 +1,229 @@
+name: Terraform CD - Dev - Fast Track
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "demo-folder/iac-fasttrack/terraform/**"
+      - "environments/dev/**"
+  workflow_dispatch:
+    inputs:
+      plan_run_id:
+        description: 'CI workflow run ID to use for plan artifact (optional)'
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+env:
+  WORKDIR: "demo-folder/iac-fasttrack"
+  TF_INPUT: "false"
+  TF_IN_AUTOMATION: "true"
+  TERRAFORM_VERSION: "1.13.3"
+  ENVIRONMENT: "dev"
+
+jobs:
+  deploy-dev:
+    name: 🔧 Deploy to Dev
+    runs-on: ubuntu-latest
+    environment: 
+      name: dev
+      url: https://portal.azure.com/#@/resource/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID_TISIP }}/resourceGroups/rg-storage-dev
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Cache Terraform Providers
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.WORKDIR }}/terraform/.terraform
+          key: ${{ runner.os }}-terraform-dev-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-dev-
+            ${{ runner.os }}-terraform-
+      
+      - name: Download Plan Artifact (if provided)
+        if: github.event.inputs.plan_run_id
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-dev
+          path: ${{ env.WORKDIR }}/terraform/
+          run-id: ${{ github.event.inputs.plan_run_id }}
+        continue-on-error: true
+      
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID_TISIP }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID_TISIP }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID_TISIP }}
+      
+      - name: Configure Terraform Azure Backend
+        run: |
+          {
+            echo "ARM_USE_OIDC=true"
+            echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID_TISIP }}"
+            echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID_TISIP }}"
+            echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID_TISIP }}"
+          } >> "$GITHUB_ENV"
+      
+      - name: Set Dev Environment Variables
+        run: |
+          {
+            echo "LOCATION=northeurope"
+            echo "RESOURCE_GROUP_NAME=rg-storage-dev"
+            echo "STORAGE_ACCOUNT_NAME=stdev22100"
+            echo "STORAGE_ACCOUNT_TIER=Standard"
+            echo "STORAGE_ACCOUNT_REPLICATION_TYPE=LRS"
+            echo "CONTAINER_NAME=appdata-dev"
+          } >> "$GITHUB_ENV"
+      
+      - name: Terraform Init
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/environments/dev/backend-dev.hcl" \
+            -input=false \
+            -no-color
+      
+      - name: Check for Existing Plan
+        id: check_plan
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          if [ -f "dev.tfplan" ]; then
+            echo "plan_exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Using existing plan from CI pipeline"
+          else
+            echo "plan_exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No existing plan found, will create new plan"
+          fi
+      
+      - name: Create New Plan (if needed)
+        if: steps.check_plan.outputs.plan_exists == 'false'
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform plan -no-color \
+            -var="location=${{ env.LOCATION }}" \
+            -var="resource_group_name=${{ env.RESOURCE_GROUP_NAME }}" \
+            -var="storage_account_name=${{ env.STORAGE_ACCOUNT_NAME }}" \
+            -var="storage_account_tier=${{ env.STORAGE_ACCOUNT_TIER }}" \
+            -var="storage_account_replication_type=${{ env.STORAGE_ACCOUNT_REPLICATION_TYPE }}" \
+            -var="container_name=${{ env.CONTAINER_NAME }}" \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -out=dev.tfplan
+      
+      - name: Terraform Apply
+        id: apply
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          set +e
+          terraform apply -no-color -auto-approve dev.tfplan 2>&1 | tee apply-output.txt
+          APPLY_EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+          
+          {
+            echo "APPLY_EXIT_CODE=${APPLY_EXIT_CODE}"
+            echo 'APPLY_OUTPUT<<EOF'
+            cat apply-output.txt
+            echo 'EOF'
+          } >> "$GITHUB_ENV"
+          
+          exit ${APPLY_EXIT_CODE}
+      
+      - name: Extract Terraform Outputs
+        if: steps.apply.outcome == 'success'
+        id: outputs
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          # Extract key outputs for validation
+          terraform output -json > outputs.json
+          cat outputs.json
+          
+          echo "outputs_extracted=true" >> $GITHUB_OUTPUT
+      
+      - name: Smoke Test - Verify Deployment
+        if: steps.apply.outcome == 'success'
+        run: |
+          echo "🧪 Running smoke tests for Dev environment..."
+          
+          # Verify Resource Group exists
+          az group show --name ${{ env.RESOURCE_GROUP_NAME }} --output table
+          
+          # Verify Storage Account exists and is accessible
+          az storage account show \
+            --name ${{ env.STORAGE_ACCOUNT_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
+            --output table
+          
+          # Verify Container exists
+          az storage container show \
+            --name ${{ env.CONTAINER_NAME }} \
+            --account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+            --auth-mode login \
+            --output table
+          
+          echo "✅ Smoke tests passed!"
+      
+      - name: Upload Deployment Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-dev-${{ github.run_number }}
+          path: |
+            ${{ env.WORKDIR }}/terraform/apply-output.txt
+            ${{ env.WORKDIR }}/terraform/outputs.json
+          retention-days: 30
+      
+      - name: Tag Successful Deployment
+        if: steps.apply.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          TAG_NAME="dev-deployed-$(date +'%Y%m%d-%H%M%S')"
+          git tag -a "${TAG_NAME}" -m "Deployed to dev environment"
+          git push origin "${TAG_NAME}" || echo "Tag already exists or push failed"
+      
+      - name: Update Deployment Summary
+        if: always()
+        run: |
+          echo "## 🔧 Dev Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.apply.outcome }}" == "success" ]; then
+            echo "### ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Dev" >> $GITHUB_STEP_SUMMARY
+          echo "**Location:** \`${{ env.LOCATION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Resource Group:** \`${{ env.RESOURCE_GROUP_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Storage Account:** \`${{ env.STORAGE_ACCOUNT_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Time:** $(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[View in Azure Portal](https://portal.azure.com/#@/resource/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID_TISIP }}/resourceGroups/${{ env.RESOURCE_GROUP_NAME }})" >> $GITHUB_STEP_SUMMARY
+
+  notify-test:
+    name: 📢 Notify Test Team
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    if: success()
+    
+    steps:
+      - name: Create Notification
+        run: |
+          echo "✅ Dev deployment successful - Test environment ready for deployment"
+          echo "Test team can now trigger Test deployment workflow"
