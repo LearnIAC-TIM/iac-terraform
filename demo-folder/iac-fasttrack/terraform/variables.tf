@@ -14,13 +14,13 @@ variable "storage_account_name" {
 }
 
 variable "storage_account_tier" {
-  type        = string
-  default     = "Standard"
+  type    = string
+  default = "Standard"
 }
 
 variable "storage_account_replication_type" {
-  type        = string
-  default     = "LRS"
+  type    = string
+  default = "LRS"
 }
 
 variable "container_name" {
