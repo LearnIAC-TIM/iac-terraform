@@ -32,7 +32,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: 
       name: dev
-      url: https://portal.azure.com/#@/resource/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID_TISIP }}/resourceGroups/rg-storage-dev
     
     steps:
       - name: Checkout
