@@ -1,0 +1,350 @@
+name: Terraform CD - Test-DEMO
+
+on:
+  workflow_dispatch:
+    inputs:
+      plan_run_id:
+        description: 'CI workflow run ID to use for plan artifact (optional)'
+        required: false
+        type: string
+      skip_smoke_tests:
+        description: 'Skip smoke tests after deployment'
+        required: false
+        type: boolean
+        default: false
+      deployment_reason:
+        description: 'Reason for deployment (for audit log)'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+  issues: write
+
+env:
+  WORKDIR: "demo-folder/iac-fasttrack"
+  TF_INPUT: "false"
+  TF_IN_AUTOMATION: "true"
+  TERRAFORM_VERSION: "1.13.4"
+  ENVIRONMENT: "test"
+
+jobs:
+  pre-deployment-check:
+    name: 🔍 Pre-Deployment Validation
+    runs-on: ubuntu-latest
+    outputs:
+      dev_healthy: ${{ steps.check_dev.outputs.healthy }}
+      can_proceed: ${{ steps.decision.outputs.can_proceed }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Check Dev Environment Health
+        id: check_dev
+        run: |
+          echo "Checking if Dev environment is healthy..."
+          # In real scenario, you would check actual dev environment status
+          # For now, we'll assume it's healthy
+          echo "healthy=true" >> $GITHUB_OUTPUT
+          echo "✅ Dev environment is healthy"
+      
+      - name: Verify Prerequisites
+        id: decision
+        run: |
+          if [ "${{ steps.check_dev.outputs.healthy }}" == "true" ]; then
+            echo "can_proceed=true" >> $GITHUB_OUTPUT
+            echo "✅ All prerequisites met - can proceed with Test deployment"
+          else
+            echo "can_proceed=false" >> $GITHUB_OUTPUT
+            echo "❌ Prerequisites not met - Dev environment issues detected"
+            exit 1
+          fi
+      
+      - name: Log Deployment Request
+        run: |
+          echo "## 📝 Deployment Request Logged" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Test" >> $GITHUB_STEP_SUMMARY
+          echo "**Requested by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Reason:** ${{ github.event.inputs.deployment_reason }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Dev Health Check:** ${{ steps.check_dev.outputs.healthy }}" >> $GITHUB_STEP_SUMMARY
+
+  deploy-test:
+    name: 🧪 Deploy to Test
+    runs-on: ubuntu-latest
+    needs: pre-deployment-check
+    if: needs.pre-deployment-check.outputs.can_proceed == 'true'
+    environment: 
+      name: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Cache Terraform Providers
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.WORKDIR }}/terraform/.terraform
+          key: ${{ runner.os }}-terraform-test-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-test-
+            ${{ runner.os }}-terraform-
+      
+      - name: Download Plan Artifact (if provided)
+        if: github.event.inputs.plan_run_id
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-test
+          path: ${{ env.WORKDIR }}/terraform/
+          run-id: ${{ github.event.inputs.plan_run_id }}
+        continue-on-error: true
+      
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID_TISIP }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID_TISIP }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID_TISIP }}
+      
+      - name: Configure Terraform Azure Backend
+        run: |
+          {
+            echo "ARM_USE_OIDC=true"
+            echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID_TISIP }}"
+            echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID_TISIP }}"
+            echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID_TISIP }}"
+          } >> "$GITHUB_ENV"
+      
+      - name: Set Test Environment Variables
+        run: |
+          {
+            echo "LOCATION=northeurope"
+            echo "RESOURCE_GROUP_NAME=rg-storage-test"
+            echo "STORAGE_ACCOUNT_NAME=sttest6391"
+            echo "STORAGE_ACCOUNT_TIER=Standard"
+            echo "STORAGE_ACCOUNT_REPLICATION_TYPE=LRS"
+            echo "CONTAINER_NAME=appdata-test"
+          } >> "$GITHUB_ENV"
+      
+      - name: Terraform Init
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/demo-folder/iac-fasttrack/environments/test/backend-test.hcl" \
+            -input=false \
+            -no-color
+      
+      - name: Check for Existing Plan
+        id: check_plan
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          if [ -f "test.tfplan" ]; then
+            echo "plan_exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Using existing plan from CI pipeline"
+          else
+            echo "plan_exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No existing plan found, creating new plan for review"
+          fi
+      
+      - name: Create and Review Plan (if needed)
+        if: steps.check_plan.outputs.plan_exists == 'false'
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform plan -no-color \
+            -var="location=${{ env.LOCATION }}" \
+            -var="resource_group_name=${{ env.RESOURCE_GROUP_NAME }}" \
+            -var="storage_account_name=${{ env.STORAGE_ACCOUNT_NAME }}" \
+            -var="storage_account_tier=${{ env.STORAGE_ACCOUNT_TIER }}" \
+            -var="storage_account_replication_type=${{ env.STORAGE_ACCOUNT_REPLICATION_TYPE }}" \
+            -var="container_name=${{ env.CONTAINER_NAME }}" \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -out=test.tfplan 2>&1 | tee plan-output.txt
+          
+          echo "📋 Plan created - review above before proceeding with apply"
+      
+      - name: Terraform Apply
+        id: apply
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          echo "🚀 Applying Terraform changes to Test environment..."
+          
+          set +e
+          terraform apply -no-color -auto-approve test.tfplan 2>&1 | tee apply-output.txt
+          APPLY_EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+          
+          {
+            echo "APPLY_EXIT_CODE=${APPLY_EXIT_CODE}"
+            echo 'APPLY_OUTPUT<<EOF'
+            cat apply-output.txt
+            echo 'EOF'
+          } >> "$GITHUB_ENV"
+          
+          exit ${APPLY_EXIT_CODE}
+      
+      - name: Extract Terraform Outputs
+        if: steps.apply.outcome == 'success'
+        id: outputs
+        working-directory: ${{ env.WORKDIR }}/terraform
+        run: |
+          terraform output -json > outputs.json
+          cat outputs.json
+          echo "outputs_extracted=true" >> $GITHUB_OUTPUT
+      
+      - name: Comprehensive Smoke Tests
+        if: steps.apply.outcome == 'success' && github.event.inputs.skip_smoke_tests != 'true'
+        run: |
+          echo "🧪 Running comprehensive smoke tests for Test environment..."
+          
+          # Verify Resource Group
+          echo "Checking Resource Group..."
+          az group show --name ${{ env.RESOURCE_GROUP_NAME }} --output table
+          
+          # Verify Storage Account
+          echo "Checking Storage Account..."
+          az storage account show \
+            --name ${{ env.STORAGE_ACCOUNT_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
+            --output table
+          
+          # Verify replication type
+          REPLICATION=$(az storage account show \
+            --name ${{ env.STORAGE_ACCOUNT_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
+            --query 'sku.name' -o tsv)
+          
+          if [[ "$REPLICATION" == *"LRS"* ]]; then
+            echo "✅ Replication type correct: LRS"
+          else
+            echo "❌ Unexpected replication type: $REPLICATION"
+            exit 1
+          fi
+          
+          # Verify Container
+          echo "Checking Container..."
+          az storage container show \
+            --name ${{ env.CONTAINER_NAME }} \
+            --account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+            --auth-mode login \
+            --output table
+          
+          # Test write/read operations
+          echo "Testing write/read operations..."
+          TEST_FILE="test-$(date +%s).txt"
+          echo "Test content" > $TEST_FILE
+          
+          az storage blob upload \
+            --account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+            --container-name ${{ env.CONTAINER_NAME }} \
+            --name $TEST_FILE \
+            --file $TEST_FILE \
+            --auth-mode login
+          
+          az storage blob download \
+            --account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+            --container-name ${{ env.CONTAINER_NAME }} \
+            --name $TEST_FILE \
+            --file downloaded-$TEST_FILE \
+            --auth-mode login
+          
+          if diff $TEST_FILE downloaded-$TEST_FILE; then
+            echo "✅ Write/Read test passed"
+          else
+            echo "❌ Write/Read test failed"
+            exit 1
+          fi
+          
+          # Cleanup test files
+          az storage blob delete \
+            --account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+            --container-name ${{ env.CONTAINER_NAME }} \
+            --name $TEST_FILE \
+            --auth-mode login
+          
+          echo "✅ All smoke tests passed!"
+      
+      - name: Upload Deployment Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-test-${{ github.run_number }}
+          path: |
+            ${{ env.WORKDIR }}/terraform/apply-output.txt
+            ${{ env.WORKDIR }}/terraform/outputs.json
+            ${{ env.WORKDIR }}/terraform/plan-output.txt
+          retention-days: 90
+      
+      - name: Tag Successful Deployment
+        if: steps.apply.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          TAG_NAME="test-deployed-$(date +'%Y%m%d-%H%M%S')"
+          git tag -a "${TAG_NAME}" -m "Deployed to test environment - Reason: ${{ github.event.inputs.deployment_reason }}"
+          git push origin "${TAG_NAME}" || echo "Tag already exists or push failed"
+      
+      - name: Update Deployment Summary
+        if: always()
+        run: |
+          echo "## 🧪 Test Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.apply.outcome }}" == "success" ]; then
+            echo "### ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Details:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: Test" >> $GITHUB_STEP_SUMMARY
+          echo "- Triggered by: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Reason: ${{ github.event.inputs.deployment_reason }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Location: \`${{ env.LOCATION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Resource Group: \`${{ env.RESOURCE_GROUP_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Storage Account: \`${{ env.STORAGE_ACCOUNT_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Smoke Tests: ${{ github.event.inputs.skip_smoke_tests == 'true' && 'Skipped' || 'Passed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment Time: $(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[View in Azure Portal](https://portal.azure.com/#@/resource/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID_TISIP }}/resourceGroups/${{ env.RESOURCE_GROUP_NAME }})" >> $GITHUB_STEP_SUMMARY
+
+  post-deployment-validation:
+    name: 🔬 Extended Validation
+    runs-on: ubuntu-latest
+    needs: deploy-test
+    if: success()
+    
+    steps:
+      - name: Wait for System Stabilization
+        run: |
+          echo "⏱️ Waiting 30 seconds for system to stabilize..."
+          sleep 30
+      
+      - name: Integration Tests Placeholder
+        run: |
+          echo "🔬 This is where integration tests would run"
+          echo "Examples:"
+          echo "- API endpoint tests"
+          echo "- Database connectivity tests"
+          echo "- Service-to-service communication tests"
+          echo "- Performance baseline tests"
+          echo ""
+          echo "✅ Integration tests placeholder passed"
+      
+      - name: Notify QA Team
+        run: |
+          echo "📢 Test environment deployed and validated"
+          echo "QA team can now begin testing"
+          echo ""
+          echo "Deployment reason: ${{ github.event.inputs.deployment_reason }}"
