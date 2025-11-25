@@ -320,12 +320,7 @@ terraform -chdir=../../terraform init -backend-config="../environments/dev/backe
    - DEV SP har kun tilgang til dev-ressurser
    - PROD SP har kun tilgang til prod-ressurser
 
-3. **Aktiver MFA** på Azure-kontoen din
-
-4. **Roter secrets regelmessig**
-   - Client secrets bør byttes hvert 6-12 måned
-
-5. **Bruk Azure Key Vault** for production secrets
+3. **Bruk Azure Key Vault** for production secrets
 
 ---
 
