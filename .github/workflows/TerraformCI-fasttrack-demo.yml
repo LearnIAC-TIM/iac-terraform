@@ -186,6 +186,7 @@ jobs:
           terraform init \
             -backend-config="../environments/${{ matrix.environment }}/backend-${{ matrix.environment }}.hcl" \
             -input=false \
+            -reconfigure \
             -no-color
       
       - name: Terraform Plan
