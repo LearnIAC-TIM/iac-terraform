@@ -6,8 +6,6 @@ on:
       - main
     paths:
       - "demo-folder/iac-fasttrack/terraform/**"
-      - "environments/**"
-      - ".github/workflows/terraform-ci.yml"
   workflow_dispatch:
 
 permissions:
