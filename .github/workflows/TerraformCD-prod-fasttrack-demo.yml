@@ -92,7 +92,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}/terraform
         run: |
           terraform init \
-            -backend-config="../environments/prod/backend-dev.hcl" \
+            -backend-config="../environments/prod/backend-prod.hcl" \
             -input=false \
             -reconfigure \
             -no-color
