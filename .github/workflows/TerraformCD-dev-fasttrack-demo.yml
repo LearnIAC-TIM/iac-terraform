@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - "demo-folder/iac-fasttrack/terraform/**"
-      - "environments/dev/**"
   workflow_dispatch:
     inputs:
       plan_run_id:
@@ -20,7 +19,7 @@ permissions:
   actions: read
 
 env:
-  WORKDIR: "demo-folder/iac-fasttrack"
+  WORKDIR: "demo-folder/iac-fasttrack-DEMO"
   TF_INPUT: "false"
   TF_IN_AUTOMATION: "true"
   TERRAFORM_VERSION: "1.13.3"
@@ -81,19 +80,21 @@ jobs:
         run: |
           {
             echo "LOCATION=northeurope"
-            echo "RESOURCE_GROUP_NAME=rg-storage-dev"
-            echo "STORAGE_ACCOUNT_NAME=stdev22100"
+            echo "RESOURCE_GROUP_NAME=rg-timdemotf-dev"
+            echo "STORAGE_ACCOUNT_NAME=timdemoftdev2025dsa"
             echo "STORAGE_ACCOUNT_TIER=Standard"
             echo "STORAGE_ACCOUNT_REPLICATION_TYPE=LRS"
             echo "CONTAINER_NAME=appdata-dev"
+            echo "ENVIRONMENT=dev"
           } >> "$GITHUB_ENV"
       
       - name: Terraform Init
         working-directory: ${{ env.WORKDIR }}/terraform
         run: |
           terraform init \
-          -backend-config="${{ github.workspace }}/demo-folder/iac-fasttrack/environments/dev/backend-dev.hcl" \
+            -backend-config="../environments/dev/backend-dev.hcl" \
             -input=false \
+            -reconfigure \
             -no-color
       
       - name: Check for Existing Plan
