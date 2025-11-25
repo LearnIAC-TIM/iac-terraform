@@ -74,7 +74,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}/terraform
         run: |
           terraform init \
-            -backend-config="${{ github.workspace }}/environments/dev/backend-dev.hcl" \
+            -backend-config="../environments/dev/backend-dev.hcl" \
             -input=false \
             -no-color
       
@@ -184,7 +184,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}/terraform
         run: |
           terraform init \
-            -backend-config="${{ github.workspace }}/environments/${{ matrix.environment }}/backend-${{ matrix.environment }}.hcl" \
+            -backend-config="../environments/${{ matrix.environment }}/backend-${{ matrix.environment }}.hcl" \
             -input=false \
             -no-color
       
