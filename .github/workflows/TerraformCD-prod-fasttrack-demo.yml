@@ -26,11 +26,11 @@ env:
   ENVIRONMENT: "prod"
 
 jobs:
-  deploy-dev:
+  deploy-Prod:
     name: 🔧 Deploy to Prod
     runs-on: ubuntu-latest
     environment: 
-      name: dev
+      name: prod
 
     steps:
       - name: Checkout
@@ -46,7 +46,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.WORKDIR }}/terraform/.terraform
-          key: ${{ runner.os }}-terraform-dev-${{ hashFiles('**/.terraform.lock.hcl') }}
+          key: ${{ runner.os }}-terraform-prod-${{ hashFiles('**/.terraform.lock.hcl') }}
           restore-keys: |
             ${{ runner.os }}-terraform-prod-
             ${{ runner.os }}-terraform-
@@ -76,7 +76,7 @@ jobs:
             echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID_TISIP }}"
           } >> "$GITHUB_ENV"
       
-      - name: Set Dev Environment Variables
+      - name: Set Prod Environment Variables
         run: |
           {
             echo "LOCATION=northeurope"
@@ -84,8 +84,8 @@ jobs:
             echo "STORAGE_ACCOUNT_NAME=timdemoftprod2025dsa"
             echo "STORAGE_ACCOUNT_TIER=Standard"
             echo "STORAGE_ACCOUNT_REPLICATION_TYPE=LRS"
-            echo "CONTAINER_NAME=appdata-dev"
-            echo "ENVIRONMENT=dev"
+            echo "CONTAINER_NAME=appdata-prod"
+            echo "ENVIRONMENT=prod"
           } >> "$GITHUB_ENV"
       
       - name: Terraform Init
