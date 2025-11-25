@@ -16,7 +16,7 @@ permissions:
   pull-requests: write
 
 env:
-  WORKDIR: "demo-folder/iac-fasttrack"
+  WORKDIR: "demo-folder/iac-fasttrack-DEMO"
   TF_INPUT: "false"
   TF_IN_AUTOMATION: "true"
   TERRAFORM_VERSION: "1.13.3"
@@ -147,8 +147,8 @@ jobs:
             dev)
               {
                 echo "LOCATION=northeurope"
-                echo "RESOURCE_GROUP_NAME=rg-storage-dev"
-                echo "STORAGE_ACCOUNT_NAME=stdev22100"
+                echo "RESOURCE_GROUP_NAME=rg-timdemotf-dev"
+                echo "STORAGE_ACCOUNT_NAME=timdemoftdev2025dsa"
                 echo "STORAGE_ACCOUNT_TIER=Standard"
                 echo "STORAGE_ACCOUNT_REPLICATION_TYPE=LRS"
                 echo "CONTAINER_NAME=appdata-dev"
@@ -158,8 +158,8 @@ jobs:
             test)
               {
                 echo "LOCATION=northeurope"
-                echo "RESOURCE_GROUP_NAME=rg-storage-test"
-                echo "STORAGE_ACCOUNT_NAME=sttest6391"
+                echo "RESOURCE_GROUP_NAME=rg-timdemotf-test"
+                echo "STORAGE_ACCOUNT_NAME=timdemofttest2025dsa"
                 echo "STORAGE_ACCOUNT_TIER=Standard"
                 echo "STORAGE_ACCOUNT_REPLICATION_TYPE=LRS"
                 echo "CONTAINER_NAME=appdata-test"
@@ -169,8 +169,8 @@ jobs:
             prod)
               {
                 echo "LOCATION=northeurope"
-                echo "RESOURCE_GROUP_NAME=rg-storage-prod"
-                echo "STORAGE_ACCOUNT_NAME=stprod23449"
+                echo "RESOURCE_GROUP_NAME=rg-timdemotf-prod"
+                echo "STORAGE_ACCOUNT_NAME=timdemofttest2025dsa"
                 echo "STORAGE_ACCOUNT_TIER=Standard"
                 echo "STORAGE_ACCOUNT_REPLICATION_TYPE=GRS"
                 echo "CONTAINER_NAME=appdata-prod"
