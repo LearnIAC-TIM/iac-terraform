@@ -1,0 +1,7 @@
+# Kopier til terraform.tfvars og fyll inn. terraform.tfvars er i .gitignore.
+kortnavn              = "<dittkortnavn>"
+pipeline_principal_id = "<ID>"
+
+# For å finne pipeline_principal_id: (MERK, må være innlogget med az login --tenant "<dinTenantID>")
+# az ad sp list --display-name "<dinAppName>" --query "[].id" --output tsv
+# az ad sp list --spn "<dinAppID>" --query "[].id" --output tsv

@@ -26,5 +26,8 @@ resource "azurerm_resource_group" "demo" {
   tags = {
     miljo = "dev"
     endre = "ja" # Endre denne verdien for å ha noe å pushe (figur 03)
+    # husk å skriv inn tags for å ta vare på Resource Group
+    # keep : true
+    # Hvis ikke slettes den av nattlig opprydding
   }
 }
