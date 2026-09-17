@@ -1,0 +1,11 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Verdier holdes utenfor Git (figur 01–04)
+*.tfvars
+
+# macOS
+.DS_Store

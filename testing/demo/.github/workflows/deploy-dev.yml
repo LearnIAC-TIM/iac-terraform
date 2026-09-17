@@ -1,0 +1,70 @@
+name: Deploy dev
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/deploy-dev.yml'
+  workflow_dispatch:   # reserveknapp hvis pushen ikke trigger under demoen
+
+permissions:
+  id-token: write      # uten denne får jobben aldri et OIDC-token
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev   # federated credential-en matcher på dette navnet
+
+    defaults:
+      run:
+        working-directory: infra
+
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_INPUT: false
+      TF_IN_AUTOMATION: true
+
+    steps:
+      - name: 1 checkout
+        uses: actions/checkout@v5
+
+      - name: 2 setup-terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: 3 azure/login (OIDC — ingen passord)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: 4 hent verdier fra Key Vault → dev.tfvars
+        run: |
+          KV="${{ secrets.KEYVAULT_NAME }}"
+          RG=$(az keyvault secret show --vault-name "$KV" --name rg-name  --query value -o tsv)
+          LOC=$(az keyvault secret show --vault-name "$KV" --name location --query value -o tsv)
+          printf 'rg_name  = "%s"\nlocation = "%s"\n' "$RG" "$LOC" > dev.tfvars
+
+      - name: 5 terraform init
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/backend.hcl" \
+            -backend-config="key=dev/infra.tfstate"
+
+      - name: 6 terraform validate
+        run: terraform validate
+
+      - name: 7 terraform plan
+        run: terraform plan -var-file=dev.tfvars -out=tfplan
+
+      - name: 8 terraform apply
+        run: terraform apply tfplan
+
+      - name: 9 slett .tfvars
+        if: always()
+        run: rm -f dev.tfvars tfplan

@@ -1,0 +1,19 @@
+subscription_id    = "a3adf20e-4966-4afb-b717-4de1baae6db1"  # bytt til faktisk ID
+environment        = "prod"
+location           = "westeurope"
+name_prefix        = "demo"
+
+vnet_cidr          = "10.30.0.0/16"
+subnet_cidr        = "10.30.1.0/24"
+allow_ssh_cidr     = "x.x.x.x/32" # bytt til din IP for demo
+
+vm_size            = "Standard_D2s_v5"
+admin_username     = "azureuser"
+ssh_public_key     = "" # Her må du lime inn din egen public key fra ~/.ssh/id_rsa.pub
+
+allocate_public_ip = false
+
+tags = {
+  env   = "prod"
+  owner = "team-x"
+}
