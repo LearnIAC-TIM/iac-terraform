@@ -11,7 +11,7 @@ jobs:
   verifiser:
     runs-on: ubuntu-latest
  
-    environment: dev
+    environment: test
  
     steps:
       - name: Azure Login
