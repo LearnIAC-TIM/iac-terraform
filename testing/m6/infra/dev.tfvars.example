@@ -1,4 +1,0 @@
-# Kopier til dev.tfvars for lokal kjøring. dev.tfvars er i .gitignore.
-# Workflowen bygger den samme fila fra Key Vault (secretene rg-name og location).
-rg_name  = "<sett-inn-navn-på-resource-group>"
-location = "norwayeast"

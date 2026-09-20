@@ -25,6 +25,9 @@ data "azurerm_client_config" "current" {}
 resource "azurerm_resource_group" "backend" {
   name     = "rg-demo-backend-${var.kortnavn}"
   location = var.location
+  tags = {
+    keep = "true"
+  }
 }
 
 # --- State ---

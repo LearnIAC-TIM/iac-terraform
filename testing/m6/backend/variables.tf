@@ -5,7 +5,7 @@ variable "kortnavn" {
 
 variable "location" {
   type    = string
-  default = "westeurope"
+  default = "norwayeast"
 }
 
 variable "pipeline_principal_id" {
