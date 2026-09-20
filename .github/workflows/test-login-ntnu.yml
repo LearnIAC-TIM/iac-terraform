@@ -1,4 +1,4 @@
-name: Verifiser innlogging mot Azure
+name: Verifiser innlogging mot Azure NTNU
 
 on:
   workflow_dispatch:            # startes manuelt fra Actions-fanen
