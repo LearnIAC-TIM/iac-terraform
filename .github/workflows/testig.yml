@@ -1,30 +1,25 @@
 name: Verifiser innlogging mot Azure
-
+ 
 on:
-  workflow_dispatch:            # startes manuelt fra Actions-fanen
-    inputs:
-      environment:
-        description: Hvilket miljø skal testes
-        type: choice
-        options: [dev, test, prod]
-        required: true
-
+  workflow_dispatch:
+ 
 permissions:
-  id-token: write               # lar jobben hente OIDC-token fra GitHub
+  id-token: write
   contents: read
-
+ 
 jobs:
   verifiser:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}   # MÅ matche :environment:<miljø> i subject-strengen
-
+ 
+    environment: dev
+ 
     steps:
-      - name: Logg inn i Azure
+      - name: Logg inn i Azure med OIDC
         uses: azure/login@v2
         with:
-          client-id:       ${{ secrets.AZURE_CLIENT_ID_TISIP }}
-          tenant-id:       ${{ secrets.AZURE_TENANT_ID_TISIP }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID_TISIP }}
-
-      - name: Hvem er jeg?
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+ 
+      - name: Hvem ble jeg?
         run: az account show --output table
