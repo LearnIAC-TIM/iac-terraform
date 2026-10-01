@@ -60,3 +60,11 @@ module "network" {
   subnets       = var.subnets
   tags          = local.tags
 }
+
+# Test dev, test prod kjeden
+
+resource "azurerm_resource_group" "rg-demo-kjeden" {
+  name     = format("rg-testkjeden-%s", local.base_name)
+  location = var.location
+  tags     = local.tags
+}
