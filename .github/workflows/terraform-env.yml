@@ -54,7 +54,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: stacks/nettverk
+        working-directory: testing/modul6/demo/stacks/nettverk
 
     env:
       ARM_USE_OIDC: true
@@ -95,7 +95,7 @@ jobs:
       - name: Init
         run: |
           terraform init \
-            -backend-config="${{ github.workspace }}/shared/backend.hcl" \
+            -backend-config="${{ github.workspace }}/testing/modul6/demo/shared/backend.hcl" \
             -backend-config="key=env/${{ inputs.miljo }}/nettverk.tfstate"
 
       - name: Validate
@@ -118,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: tfplan-${{ inputs.miljo }}-${{ github.sha }}
-          path: stacks/nettverk/tfplan
+          path: testing/modul6/demo/stacks/nettverk/tfplan
           # Standarden er 90 dager. En plan-fil er interessant i minutter, og
           # den inneholder parameterverdiene i klartekst.
           retention-days: 5
@@ -140,7 +140,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: stacks/nettverk
+        working-directory: testing/modul6/demo/stacks/nettverk
 
     env:
       ARM_USE_OIDC: true
@@ -170,12 +170,12 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: tfplan-${{ inputs.miljo }}-${{ github.sha }}
-          path: stacks/nettverk
+          path: testing/modul6/demo/stacks/nettverk
 
       - name: Init
         run: |
           terraform init \
-            -backend-config="${{ github.workspace }}/shared/backend.hcl" \
+            -backend-config="${{ github.workspace }}/testing/modul6/demo/shared/backend.hcl" \
             -backend-config="key=env/${{ inputs.miljo }}/nettverk.tfstate"
 
       # K7: legg merke til hva som IKKE står i denne jobben -- ingen

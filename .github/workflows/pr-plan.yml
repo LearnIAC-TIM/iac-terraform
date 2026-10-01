@@ -15,8 +15,8 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'stacks/nettverk/**'
-      - 'modules/network/**'
+      - 'testing/modul6/demo/stacks/nettverk/**'
+      - 'testing/modul6/demo/modules/network/**'
       - '.github/workflows/pr-plan.yml'
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: stacks/nettverk
+        working-directory: testing/modul6/demo/stacks/nettverk
 
     env:
       ARM_USE_OIDC: true

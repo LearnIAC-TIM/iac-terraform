@@ -20,7 +20,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'stacks/nettverk/**'
+      - 'testing/modul6/demo/stacks/nettverk/**'
       - 'modules/network/**'
       - '.github/workflows/pr-kontroller.yml'
 

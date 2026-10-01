@@ -18,9 +18,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'stacks/nettverk/**'
-      - 'modules/network/**'
-      - 'shared/backend.hcl'
+      - 'testing/modul6/demo/stacks/nettverk/**'
+      - 'testing/modul6/demo/modules/network/**'
+      - 'testing/modul6/demo/shared/backend.hcl'
       - '.github/workflows/deploy-nettverk.yml'
       # Ta ALLTID med den gjenbrukbare workflowen også. Uten den oppdager du
       # ikke at du har ødelagt refaktoreringen før neste gang du tilfeldigvis
