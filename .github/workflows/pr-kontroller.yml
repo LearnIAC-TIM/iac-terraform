@@ -21,7 +21,7 @@ on:
     branches: [main]
     paths:
       - 'testing/modul6/demo/stacks/nettverk/**'
-      - 'modules/network/**'
+      - 'testing/modul6/demo/modules/network/**'
       - '.github/workflows/pr-kontroller.yml'
 
 # K2, og sidens viktigste to linjer. Når du lister permissions eksplisitt, får
@@ -70,9 +70,9 @@ jobs:
       # `terraform providers lock -platform=...`, feiler DETTE steget -- på en
       # pull request, i en jobb som ikke ruller ut noe. Billigste mulige sted.
       - name: Klargjør providere uten backend
-        working-directory: stacks/nettverk
+        working-directory: testing/modul6/demo/stacks/nettverk
         run: terraform init -backend=false
 
       - name: Valider koden
-        working-directory: stacks/nettverk
+        working-directory: testing/modul6/demo/stacks/nettverk
         run: terraform validate

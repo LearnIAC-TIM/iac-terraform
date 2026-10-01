@@ -81,7 +81,7 @@ jobs:
       - name: Init
         run: |
           terraform init \
-            -backend-config="${{ github.workspace }}/shared/backend.hcl" \
+            -backend-config="${{ github.workspace }}/testing/modul6/demo/shared/backend.hcl" \
             -backend-config="key=env/dev/nettverk.tfstate"
 
       # -lock=false: en gjennomgang skal ikke stå i veien for en utrulling, og
@@ -114,7 +114,7 @@ jobs:
           } > "${{ github.workspace }}/kommentar.md"
 
           gh pr comment "${{ github.event.pull_request.number }}" \
-            --body-file "${{ github.workspace }}/kommentar.md"
+            --body-file "${{ github.workspace }}/testing/modul6/demo/kommentar.md"
 
       - name: Slett parameterfila
         if: always()
