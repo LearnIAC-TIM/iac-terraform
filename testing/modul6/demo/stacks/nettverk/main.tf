@@ -68,3 +68,9 @@ resource "azurerm_resource_group" "rg-demo-kjeden" {
   location = var.location
   tags     = local.tags
 }
+
+resource "azurerm_resource_group" "rg-demo-kjeden2" {
+  name     = format("rg-testkjeden2-%s", local.base_name)
+  location = var.location
+  tags     = local.tags
+}
