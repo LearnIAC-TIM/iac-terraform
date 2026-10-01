@@ -114,7 +114,7 @@ jobs:
           } > "${{ github.workspace }}/kommentar.md"
 
           gh pr comment "${{ github.event.pull_request.number }}" \
-            --body-file "${{ github.workspace }}/testing/modul6/demo/kommentar.md"
+            --body-file "${{ github.workspace }}/kommentar.md"
 
       - name: Slett parameterfila
         if: always()
