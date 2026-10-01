@@ -1,0 +1,121 @@
+# =============================================================================
+#  .github/workflows/pr-plan.yml  –  DEL B, planen der leseren er
+# -----------------------------------------------------------------------------
+#  Dekker K4 og K5. Denne jobben MÅ ha tilgang til Azure, i motsetning til
+#  pr-kontroller.yml -- fordi spørsmålet den svarer på ("hva vil skje?") ikke
+#  kan besvares uten å se på virkeligheten.
+#
+#  Prinsippet er det samme i begge filene: en jobb skal ha nøyaktig den
+#  tilgangen oppgaven krever, og ikke mer.
+# =============================================================================
+
+name: PR-plan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'stacks/nettverk/**'
+      - 'modules/network/**'
+      - '.github/workflows/pr-plan.yml'
+
+permissions:
+  id-token: write        # for å kunne veksle inn OIDC-tokenet
+  contents: read
+  pull-requests: write   # for å kunne skrive kommentaren. Uten denne feiler
+                         # siste steg med manglende rettigheter.
+
+# Pusher du tre commits til grenen, er bare den siste planen interessant.
+# cancel-in-progress: true her -- motsatt av utrullingen, der en påbegynt
+# apply aldri skal avbrytes.
+concurrency:
+  group: pr-plan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+
+    # K5: planen kjøres mot dev, og bare dev. Miljønavnet står ett sted i hele
+    # fila, og det er her. Søk etter "test" eller "prod" -- ingen treff.
+    environment: dev
+
+    defaults:
+      run:
+        working-directory: stacks/nettverk
+
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_INPUT: false
+      TF_IN_AUTOMATION: true
+
+    steps:
+      - name: Hent koden
+        uses: actions/checkout@v5
+
+      - name: Installer Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          # Uten denne pakkes terraform inn i et skall-skript som legger på
+          # ekstra utskrift, og `terraform show` nedenfor gir en kommentar
+          # full av støy.
+          terraform_wrapper: false
+
+      - name: Logg inn i Azure
+        uses: Azure/login@v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Hent parameterfila for dev
+        run: |
+          az keyvault secret show \
+            --vault-name "${{ secrets.KEYVAULT_NAME }}" \
+            --name "tfvars-dev" \
+            --query value -o tsv > params.auto.tfvars
+
+      - name: Init
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/shared/backend.hcl" \
+            -backend-config="key=env/dev/nettverk.tfstate"
+
+      # -lock=false: en gjennomgang skal ikke stå i veien for en utrulling, og
+      # to personer skal kunne få en plan lest samtidig. Du kan gjøre dette
+      # FORDI planen ikke skriver noe. Samme flagg på apply ville vært
+      # uforsvarlig.
+      #
+      # -no-color: uten den fylles kommentaren av [0m[1m. Fargene finnes for
+      # en terminal, ikke for en nettside.
+      - name: Plan
+        run: terraform plan -lock=false -no-color -out=tfplan
+
+      # terraform show leser den lagrede plan-fila og skriver den ut på nytt
+      # som tekst. <details> er ikke pynt: en plan på tre hundre linjer midt i
+      # en pull request-samtale gjør resten av samtalen uleselig.
+      - name: Legg planen som kommentar
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## Terraform plan - dev"
+            echo
+            echo "<details><summary>Vis hele planen</summary>"
+            echo
+            echo '```terraform'
+            terraform show -no-color tfplan
+            echo '```'
+            echo
+            echo "</details>"
+          } > "${{ github.workspace }}/kommentar.md"
+
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file "${{ github.workspace }}/kommentar.md"
+
+      - name: Slett parameterfila
+        if: always()
+        run: rm -f params.auto.tfvars

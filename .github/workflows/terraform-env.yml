@@ -1,0 +1,202 @@
+# =============================================================================
+#  .github/workflows/terraform-env.yml  –  DEN GJENBRUKBARE WORKFLOWEN
+# -----------------------------------------------------------------------------
+#  Dekker K6, K7, K9 og K12. Dette er hele utrullingen mot ETT miljø, skrevet
+#  én gang. deploy-nettverk.yml kaller den tre ganger.
+#
+#  Den erstatter deploy-jobben fra Oppgave 5. To ting er nytt:
+#    * plan og apply er delt i to JOBBER, ikke to steg (K6)
+#    * miljøet kommer inn som en input, ikke som en env-variabel (K12)
+#
+#  Hvorfor delingen i to jobber? Fordi GitHub stopper en JOBB før den starter,
+#  aldri midt inne i en. Så lenge plan og apply var to steg i samme jobb,
+#  fantes det ikke noe tidspunkt å sette en godkjenning på.
+# =============================================================================
+
+name: Terraform mot ett miljø
+
+on:
+  # workflow_call gjør dette til en workflow som ikke trigges av en hendelse,
+  # men blir KALT av en annen.
+  workflow_call:
+    inputs:
+      miljo:
+        description: Miljøet som skal rulles ut
+        required: true
+        type: string
+      plan_miljo:
+        description: GitHub-environmentet plan-jobben kjører under
+        required: true
+        type: string
+
+# Rettigheter kan bare BEHOLDES eller STRAMMES INN nedover i kjeden, aldri
+# utvides. Den som kaller, må gi id-token: write -- ellers har denne
+# workflowen den ikke, uansett hva som står her.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------- plan -----
+  plan:
+    runs-on: ubuntu-latest
+
+    # K9, og modulens mest overraskende linje. Hvorfor ikke `inputs.miljo`?
+    #
+    # Fordi en protection rule gjelder HVER jobb som nevner environmentet --
+    # også en jobb som bare planlegger. Hadde denne stått på `prod`, ville
+    # plan-jobben blitt stående og ventet på godkjenning, og du ville blitt
+    # bedt om å godkjenne FØR planen fantes.
+    #
+    # Å lese et miljø og å endre et miljø er to ulike rettigheter. Her får de
+    # to ulike navn. For dev og test er de like; for prod er de ikke.
+    environment: ${{ inputs.plan_miljo }}
+
+    defaults:
+      run:
+        working-directory: stacks/nettverk
+
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_INPUT: false
+      TF_IN_AUTOMATION: true
+
+    steps:
+      - name: Hent koden
+        uses: actions/checkout@v5
+
+      - name: Installer Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Logg inn i Azure
+        uses: Azure/login@v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # KEYVAULT_NAME er en ENVIRONMENT secret. Den følger ikke med
+      # `secrets: inherit` fra den som kaller -- jobben slår den opp selv ut
+      # fra sin egen `environment:`. Det er derfor prod-plan trenger sin egen
+      # kopi, og det er også derfor mekanismen er trygg: en jobb kan bare nå
+      # verdiene for det miljøet den faktisk kjører i.
+      - name: Hent parameterfila for miljøet
+        run: |
+          az keyvault secret show \
+            --vault-name "${{ secrets.KEYVAULT_NAME }}" \
+            --name "tfvars-${{ inputs.miljo }}" \
+            --query value -o tsv > params.auto.tfvars
+
+      - name: Init
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/shared/backend.hcl" \
+            -backend-config="key=env/${{ inputs.miljo }}/nettverk.tfstate"
+
+      - name: Validate
+        run: terraform validate
+
+      # -out=tfplan er forskjellen på en plan du LESER og en plan som KJØRES.
+      - name: Plan
+        run: terraform plan -out=tfplan
+
+      # K11: SHA-en i navnet er beviset på promotering. Etter én kjøring har de
+      # tre plan-filene samme github.sha. Kjører du miljøene som tre separate
+      # kjøringer, står det tre ulike SHA-er der, og påstanden om at det er
+      # testet, faller.
+      #
+      # path er relativ til REPO-ROTA, ikke til working-directory --
+      # defaults.run gjelder bare `run`-steg, ikke `uses`-steg. Dette er den
+      # vanligste feilen i hele oppgaven, og feilmeldingen sier bare at den
+      # ikke fant noen filer.
+      - name: Ta vare på planen
+        uses: actions/upload-artifact@v7
+        with:
+          name: tfplan-${{ inputs.miljo }}-${{ github.sha }}
+          path: stacks/nettverk/tfplan
+          # Standarden er 90 dager. En plan-fil er interessant i minutter, og
+          # den inneholder parameterverdiene i klartekst.
+          retention-days: 5
+
+      - name: Slett parameterfila
+        if: always()
+        run: rm -f params.auto.tfvars
+
+  # --------------------------------------------------------------- apply -----
+  apply:
+    needs: plan
+    runs-on: ubuntu-latest
+
+    # K8 og K10 sitter her. `environment:` gjør TO jobber på én gang: den
+    # bestemmer hvilken federated credential jobben får, OG den utløser
+    # protection rules. Det er derfor porten ikke kan omgås ved å bytte
+    # identitet -- identiteten ER porten.
+    environment: ${{ inputs.miljo }}
+
+    defaults:
+      run:
+        working-directory: stacks/nettverk
+
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_INPUT: false
+      TF_IN_AUTOMATION: true
+
+    steps:
+      - name: Hent koden
+        uses: actions/checkout@v5
+
+      - name: Installer Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Logg inn i Azure
+        uses: Azure/login@v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Hent planen
+        uses: actions/download-artifact@v8
+        with:
+          name: tfplan-${{ inputs.miljo }}-${{ github.sha }}
+          path: stacks/nettverk
+
+      - name: Init
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/shared/backend.hcl" \
+            -backend-config="key=env/${{ inputs.miljo }}/nettverk.tfstate"
+
+      # K7: legg merke til hva som IKKE står i denne jobben -- ingen
+      # `az keyvault`. Verdiene er allerede regnet inn i plan-fila, så jobben
+      # som faktisk ENDRER noe, trenger ikke tilgang til hvelvet.
+      #
+      # At jobben likevel virker, ER beviset på at planen inneholder verdiene.
+      # Og dermed også begrunnelsen for at plan-fila skal behandles som
+      # sensitiv.
+      #
+      # K6: ingen -auto-approve. Ikke fordi vi har slått av en sikring, men
+      # fordi bekreftelsen ER plan-fila. Terraform spør "er du sikker?" når den
+      # har laget en plan du ikke har sett.
+      - name: Apply
+        run: terraform apply tfplan
+
+      - name: Verifiser at nettverket finnes i Azure
+        run: |
+          RG=$(terraform output -raw resource_group_name)
+          VNET=$(terraform output -raw vnet_name)
+          STATE=$(az network vnet show --resource-group "$RG" --name "$VNET" \
+                    --query provisioningState -o tsv)
+          echo "$VNET i $RG: $STATE"
+          test "$STATE" = "Succeeded"

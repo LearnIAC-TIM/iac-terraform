@@ -1,6 +1,3 @@
-
-
-
 resource "azurerm_virtual_network" "vnet" {
   name                = "${var.name_prefix}-vnet"
   location            = var.location

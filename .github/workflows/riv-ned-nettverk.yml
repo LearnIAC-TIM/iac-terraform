@@ -1,0 +1,149 @@
+# =============================================================================
+#  .github/workflows/riv-ned-nettverk.yml  –  K10 i Oppgave 5, Del G i Oppgave 6
+# -----------------------------------------------------------------------------
+#  Fra Oppgave 5, med to endringer: prod står i lista, og concurrency-gruppa er
+#  den samme som i deploy-nettverk.yml. Nedriving av prod går gjennom samme
+#  port som utrulling – jobben har `environment: prod`, så den venter på
+#  *Review deployments* og kan bare kjøres fra `main`.
+#
+#  Samme maskineri som utrullingen, brukt på den farligste operasjonen som
+#  finnes. Den er med vilje TUNGVINT å starte:
+#
+#    * ingen push-trigger – den kan bare startes av et menneske
+#    * du må skrive «riv ned <miljø>» ordrett
+#    * en egen jobb sjekker teksten FØR noe rører Azure
+#    * nedrivingen går via plan -destroy -> apply, ikke rått destroy
+# =============================================================================
+
+name: Riv ned et miljø
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Miljø som skal rives ned
+        type: choice
+        options: [dev, test, prod]
+        required: true
+      bekreftelse:
+        description: 'Skriv "riv ned <miljø>" for å bekrefte'
+        type: string
+        required: true
+      begrunnelse:
+        description: Hvorfor river du ned?
+        type: string
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+# Samme gruppe som deploy-nettverk.yml: en nedriving skal ikke kunne gå
+# samtidig med en kjede som ruller ut.
+concurrency:
+  group: nettverk
+  cancel-in-progress: false
+
+jobs:
+  # -------------------------------------------------------------------------
+  #  Jobb 1: sier bare ja eller nei.
+  #
+  #  Den har ingen `environment:` og ingen tilgang til Azure. Den KAN ikke
+  #  gjøre skade, uansett hva som skjer inne i den. Den eneste jobben som kan
+  #  gjøre skade, er den som venter på et ja.
+  # -------------------------------------------------------------------------
+  bekreft:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sjekk bekreftelsen
+        # MERK at inputene går gjennom env:, ikke rett inn i skriptet.
+        #
+        # Skriver du   if [ "${{ inputs.bekreftelse }}" != ... ]
+        # limes teksten brukeren skrev inn i skallkommandoen FØR den kjøres.
+        # Skriver noen inn tegn som betyr noe for skallet, kjører de sine egne
+        # kommandoer på runneren din, med jobbens rettigheter.
+        #
+        # Regelen: aldri ${{ ... }} direkte i en run-kommando når verdien
+        # kommer fra et menneske.
+        env:
+          BEKREFTELSE: ${{ inputs.bekreftelse }}
+          MILJO: ${{ inputs.environment }}
+          BEGRUNNELSE: ${{ inputs.begrunnelse }}
+        run: |
+          if [ "$BEKREFTELSE" != "riv ned $MILJO" ]; then
+            echo "::error::Ikke bekreftet. Forventet nøyaktig: riv ned $MILJO"
+            exit 1
+          fi
+          # Begrunnelsen gjør ingenting teknisk. Den havner i loggen, slik at
+          # den som i november lurer på hvorfor testmiljøet forsvant, finner
+          # svaret uten å spørre.
+          echo "Bekreftet. Begrunnelse: $BEGRUNNELSE"
+
+  riv-ned:
+    # Dette er sperren. Jobben starter ikke før bekreft har gått grønt – altså
+    # før Terraform i det hele tatt har logget inn.
+    needs: bekreft
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    defaults:
+      run:
+        working-directory: stacks/nettverk
+
+    env:
+      MILJO: ${{ inputs.environment }}
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_INPUT: false
+      TF_IN_AUTOMATION: true
+
+    steps:
+      - name: Hent koden
+        uses: actions/checkout@v5
+
+      - name: Installer Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Logg inn i Azure
+        uses: Azure/login@v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Parameterfila trengs også nå. Uten den vet ikke Terraform hva
+      # ressursene heter, og kan ikke regne ut hva som skal rives.
+      - name: Hent parameterfila fra Key Vault
+        run: |
+          az keyvault secret show \
+            --vault-name "${{ secrets.KEYVAULT_NAME }}" \
+            --name "tfvars-$MILJO" \
+            --query value -o tsv > params.auto.tfvars
+
+      - name: Init
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/shared/backend.hcl" \
+            -backend-config="key=env/$MILJO/nettverk.tfstate"
+
+      # plan -destroy -> apply, ikke `terraform destroy -auto-approve`.
+      # Samme disiplin som ved utrulling: planen er et eget steg med sin egen
+      # utskrift, og den ligger i loggen etterpå. Og den viser at `apply` ikke
+      # betyr «opprett» – den betyr «gjør planen til virkelighet».
+      - name: Lag en destroy-plan
+        run: terraform plan -destroy -out=tfdestroy
+
+      - name: Utfør destroy-planen
+        run: terraform apply tfdestroy
+
+      # Skal ikke skrive ut noe. Gjør den det, står det igjen ressurser.
+      - name: Verifiser at det er tomt
+        run: terraform state list
+
+      - name: Slett parameterfila
+        if: always()
+        run: rm -f params.auto.tfvars

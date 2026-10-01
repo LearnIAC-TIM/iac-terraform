@@ -1,0 +1,80 @@
+# =============================================================================
+#  .github/workflows/deploy-nettverk.yml  –  DEN SOM KALLER
+# -----------------------------------------------------------------------------
+#  Dekker K11 og K12. Dette er hele leveransekjeden, lesbar i én skjerm.
+#
+#  I Oppgave 5 var denne fila 150 linjer med én jobb. Nå er den 40 linjer med
+#  tre kall til samme definisjon. Duplikasjonen som oppsto da test og prod kom
+#  til, er borte -- seks nesten identiske jobber ble to.
+#
+#  Det er samme grep som i Oppgave 5, ett lag lenger opp: der lærte du at
+#  miljøet er en PARAMETER og ikke en mappe. Her er miljøet en parameter og
+#  ikke en jobb du kopierer.
+# =============================================================================
+
+name: Rull ut nettverk
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'stacks/nettverk/**'
+      - 'modules/network/**'
+      - 'shared/backend.hcl'
+      - '.github/workflows/deploy-nettverk.yml'
+      # Ta ALLTID med den gjenbrukbare workflowen også. Uten den oppdager du
+      # ikke at du har ødelagt refaktoreringen før neste gang du tilfeldigvis
+      # endrer stacken.
+      - '.github/workflows/terraform-env.yml'
+
+# Den som kaller, må gi rettighetene. Rettigheter kan strammes inn nedover i
+# kjeden, aldri utvides -- så mangler id-token: write her, feiler
+# Azure/login inne i den kalte workflowen.
+permissions:
+  id-token: write
+  contents: read
+
+# Gruppa het `nettverk-dev` i Oppgave 5, da workflowen bare rullet ut dev. Nå
+# dekker den hele kjeden, så navnet må stemme. Uten dette kan to kjøringer
+# treffe prod samtidig.
+concurrency:
+  group: nettverk
+  cancel-in-progress: false
+
+jobs:
+  # K11: alle tre kallene kjører i SAMME workflow-kjøring, og en kjøring har
+  # én commit. github.sha er den samme i alle tre, og actions/checkout henter
+  # den samme commiten hver gang. Tre jobber i én kjøring KAN ikke få ulik kode.
+  #
+  # Det er forskjellen på å promotere og å kjøre pipelinen tre ganger.
+  dev:
+    uses: ./.github/workflows/terraform-env.yml
+    with:
+      miljo: dev
+      plan_miljo: dev
+    # secrets: inherit sender REPOSITORY secrets videre (AZURE_CLIENT_ID og de
+    # andre). Environment secrets følger ikke med, og skal ikke -- den kalte
+    # jobben slår dem opp selv ut fra sin egen environment:.
+    secrets: inherit
+
+  test:
+    # needs er det som gjør dette til en KJEDE og ikke en liste. Feiler dev,
+    # kjøres ikke test.
+    needs: dev
+    uses: ./.github/workflows/terraform-env.yml
+    with:
+      miljo: test
+      plan_miljo: test
+    secrets: inherit
+
+  prod:
+    needs: test
+    uses: ./.github/workflows/terraform-env.yml
+    with:
+      miljo: prod
+      # DEN ENE LINJA SOM SKILLER SEG UT, og hele innsikten fra Del D kodet i
+      # én verdi. For dev og test er plan_miljo lik miljo, fordi de miljøene
+      # ikke har noen port. For prod er de ulike, fordi porten på `prod` ellers
+      # ville stoppet også plan-jobben.
+      plan_miljo: prod-plan
+    secrets: inherit

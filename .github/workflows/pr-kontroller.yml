@@ -1,0 +1,78 @@
+# =============================================================================
+#  .github/workflows/pr-kontroller.yml  –  DEL A, kvalitetsportene
+# -----------------------------------------------------------------------------
+#  Dekker K2. Den billigste jobben i hele repoet, og den eneste som kan kjøre
+#  på en pull request fra en fremmed.
+#
+#  Legg merke til hva som IKKE står her:
+#    * ingen Azure/login
+#    * ingen id-token: write
+#    * ingen secrets
+#    * ingen backend
+#
+#  Kapittel 16 kaller dette et OFFLINE-steg: komponenten valideres uten at
+#  koden rulles ut til skyplattformen. Det er derfor den kommer først.
+# =============================================================================
+
+name: PR-kontroller
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'stacks/nettverk/**'
+      - 'modules/network/**'
+      - '.github/workflows/pr-kontroller.yml'
+
+# K2, og sidens viktigste to linjer. Når du lister permissions eksplisitt, får
+# jobben BARE det du har listet. Den har ingen bruk for en Azure-identitet, og
+# da skal den ikke ha en.
+permissions:
+  contents: read
+
+jobs:
+  kontroller:
+    # Dette navnet er det branch protection-regelen matcher på. Ikke `name:`
+    # øverst i fila. Endrer du det her uten å endre regelen, venter pull
+    # requesten i det uendelige på en kontroll som aldri rapporterer inn --
+    # den blir ikke rød, den blir bare aldri grønn.
+    name: fmt og validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Hent koden
+        uses: actions/checkout@v5
+
+      - name: Installer Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          # Samme versjon som required_version i koden. Står de ulikt, kan
+          # workflowen godta noe maskinen din avviser -- eller omvendt.
+          terraform_version: 1.16.0
+
+      # -recursive over stacks/ OG modules/, så modulene dine er med -- ikke
+      # bare stack-mappa. -check rapporterer i stedet for å rette, og gir
+      # feilkode hvis noe ikke er formatert. Det er det som gjør den til en port.
+      #
+      # DEMO-AVVIK fra løsningsforslaget, som kjører fra hele repo-rota: dette
+      # repoet har eldre kode i course_materials/, testing/ og _old/ som ikke
+      # er formatert. Fra rota ville porten vært rød på hver eneste PR.
+      - name: Sjekk formatering
+        run: terraform fmt -check -recursive stacks modules
+
+      # -backend=false er hele grunnen til at jobben klarer seg uten nøkler.
+      # validate trenger providerne for å vite om argumentene dine finnes.
+      # Providerne kommer fra init. Men init vil normalt også koble seg til
+      # storage account-et, og DET krever tilgang til Azure.
+      #
+      # Bonus: init verifiserer sjekksummene i .terraform.lock.hcl mot
+      # linux_amd64. Har du committet en låsefil laget på en Mac uten
+      # `terraform providers lock -platform=...`, feiler DETTE steget -- på en
+      # pull request, i en jobb som ikke ruller ut noe. Billigste mulige sted.
+      - name: Klargjør providere uten backend
+        working-directory: stacks/nettverk
+        run: terraform init -backend=false
+
+      - name: Valider koden
+        working-directory: stacks/nettverk
+        run: terraform validate

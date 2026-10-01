@@ -1,0 +1,159 @@
+# -----------------------------------------------------------------------------
+#  UTGANGSPUNKTET FOR VIDEOEN – deploy-nettverk.yml slik den var etter Oppgave 5
+#  (løsningsforslaget, uendret). Legg denne i .github/workflows/ før opptak, og
+#  bygg deg fram til sluttilstanden i .github/workflows/ på skjermen.
+# -----------------------------------------------------------------------------
+# =============================================================================
+#  .github/workflows/deploy-nettverk.yml  –  UTRULLINGEN
+# -----------------------------------------------------------------------------
+#  Én fil dekker K3–K9. Den ruller ut nettverks-stacken til dev automatisk ved
+#  push, og til test bare når et menneske velger det.
+#
+#  Legg merke til hva som IKKE står her:
+#    * ingen client secret
+#    * ingen storage account-navn     (K3 – de står i shared/backend.hcl)
+#    * ingen parameterverdier         (K5 – de hentes fra Key Vault)
+#    * ingen miljønavn utenom i én env-variabel (K6/K7)
+# =============================================================================
+
+name: Rull ut nettverk
+
+on:
+  # K8: push til main ruller ut dev. `paths` velger IKKE miljø – etter at de
+  # tre miljømappene ble slått sammen til én stack, finnes det ikke lenger en
+  # mappe å utlede miljøet fra. Filteret er her av en annen grunn: å slippe en
+  # apply mot Azure hver gang noen retter en skrivefeil i README-en.
+  push:
+    branches: [main]
+    paths:
+      - 'stacks/nettverk/**'
+      - 'modules/network/**'
+      - 'shared/backend.hcl'
+      # Ta ALLTID med workflow-fila selv. Uten den oppdager du ikke at du har
+      # ødelagt YAML-en før neste gang du tilfeldigvis endrer stacken.
+      - '.github/workflows/deploy-nettverk.yml'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Miljø – gjelder bare ved manuell kjøring
+        type: choice
+        # prod står med vilje ikke i lista. Ikke fordi environmentet mangler,
+        # men fordi ingenting her ennå er godt nok til å rulle ut prod:
+        # ingen godkjenning, ingen plan noen har lest. Det er modul 6.
+        options: [dev, test]
+        default: dev
+
+permissions:
+  id-token: write
+  contents: read
+
+# To lag med låsing, og de gjør ikke det samme:
+#   Terraform låser state-blobben. Den andre kjøringen FEILER.
+#   concurrency holder den andre kjøringen igjen. Den VENTER.
+# Miljønavnet må være med i gruppa – dev og test rører ulike state-filer og
+# har ingen grunn til å stå i kø for hverandre.
+concurrency:
+  group: nettverk-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    # K9, i én linje. `inputs` finnes bare når workflowen er startet manuelt.
+    # Ved en push er den tom, og uttrykket faller tilbake på 'dev'. Det finnes
+    # ingen måte å få en push til å treffe test på – annet enn å endre denne
+    # fila, som er en konvensjon og ikke en garanti. Se Del H.
+    environment: ${{ inputs.environment || 'dev' }}
+
+    defaults:
+      run:
+        working-directory: stacks/nettverk
+
+    env:
+      # Miljøet settes ETT sted og brukes tre. Den vanligste feilen i hele
+      # oppgaven er å bytte `environment:` og glemme `key` – da skriver
+      # test-kjøringen til dev sin state-fil.
+      MILJO: ${{ inputs.environment || 'dev' }}
+
+      # ARM_* leses av azurerm-provideren OG av backend-en, som autentiserer
+      # seg hver for seg. Backend-en bruker ikke CLI-økta fra azure/login.
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Jobbnivå, ikke -input=false på hvert enkelt steg. Kortere, og umulig å
+      # glemme på ett av dem. TF_INPUT: false gjør at Terraform feiler i stedet
+      # for å bli stående og vente på et svar ingen kan gi den.
+      TF_INPUT: false
+      TF_IN_AUTOMATION: true
+
+    steps:
+      - name: Hent koden
+        uses: actions/checkout@v5
+
+      - name: Installer Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          # Uten denne pakker actionen terraform inn i et skall-skript som
+          # legger på ekstra utskrift. `$(terraform output -raw ...)` fanger da
+          # opp mer enn verdien, og verifiseringssteget nedenfor slår feil på
+          # noe som egentlig er i orden.
+          terraform_wrapper: false
+
+      - name: Logg inn i Azure
+        uses: Azure/login@v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # K5: .tfvars-fila er aldri i repoet. Den ligger som én secret per miljø
+      # i Key Vault og hentes ned her. KEYVAULT_NAME er en ENVIRONMENT secret,
+      # ikke en repository secret – det er den som gjør at dev og test kan
+      # peke på hvert sitt vault den dagen de gjør det.
+      - name: Hent parameterfila fra Key Vault
+        run: |
+          az keyvault secret show \
+            --vault-name "${{ secrets.KEYVAULT_NAME }}" \
+            --name "tfvars-$MILJO" \
+            --query value -o tsv > params.auto.tfvars
+
+      # K3 og K7: adressen kommer fra den delte fila, `key` kommer fra miljøet.
+      # ${{ github.workspace }} er repo-rota på runneren – stien til backend.hcl
+      # er den samme uansett hva working-directory er satt til.
+      - name: Init
+        run: |
+          terraform init \
+            -backend-config="${{ github.workspace }}/shared/backend.hcl" \
+            -backend-config="key=env/$MILJO/nettverk.tfstate"
+
+      - name: Validate
+        run: terraform validate
+
+      - name: Plan
+        run: terraform plan
+
+      - name: Apply
+        run: terraform apply -auto-approve
+
+      # Forskjellen på en pipeline og et skript som kjørte uten å feile.
+      # `apply` bekrefter at Azure godtok forespørselen. Dette steget spør
+      # Azure om resultatet – og det gjør det uten å gå veien om state.
+      - name: Verifiser at nettverket finnes i Azure
+        run: |
+          RG=$(terraform output -raw resource_group_name)
+          VNET=$(terraform output -raw vnet_name)
+          STATE=$(az network vnet show --resource-group "$RG" --name "$VNET" \
+                    --query provisioningState -o tsv)
+          echo "$VNET i $RG: $STATE"
+          test "$STATE" = "Succeeded"
+
+      # if: always() – fila skal bort også når apply feilet. Runneren rives
+      # ned uansett, så dette er en vane mer enn et vern. Vanen er poenget:
+      # på en self-hosted runner er den ikke lenger bare en vane.
+      - name: Slett parameterfila
+        if: always()
+        run: rm -f params.auto.tfvars
